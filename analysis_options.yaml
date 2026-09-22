@@ -1,0 +1,28 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    invalid_annotation_target: ignore   # freezed + json_serializable
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  language:
+    strict-casts: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    # Immuabilité et sûreté — le dossier candidat est un agrégat immuable
+    prefer_final_locals: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    avoid_dynamic_calls: true
+    # Lisibilité
+    always_declare_return_types: true
+    prefer_single_quotes: true
+    directives_ordering: true
+    unawaited_futures: true
+    require_trailing_commas: true
+    # Garde-fous
+    avoid_print: true
+    use_build_context_synchronously: true

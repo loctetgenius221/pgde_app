@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug uniquement : autorise HTTP en clair vers le backend Laragon local
+         (10.0.2.2 / IP LAN). Jamais fusionné dans le build release. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:usesCleartextTraffic="true" />
+</manifest>

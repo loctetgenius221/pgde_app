@@ -1,0 +1,8 @@
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          # Les modèles imbriqués (Demande -> Formation/Experience) doivent
+          # sérialiser leurs enfants explicitement.
+          explicit_to_json: true
