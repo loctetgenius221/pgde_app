@@ -272,53 +272,78 @@ recadré avec marges pour l'icône adaptative Android (zone sûre de 66 %).
 
 ---
 
+## Couverture du cadrage
+
+Le parcours du §3.1 est couvert de bout en bout : inscription, activation par
+code, connexion, wizard, pièces jointes, résumé, mot de passe.
+
+| § | Exigence | Où |
+| :--- | :--- | :--- |
+| 3.2 / 7.2 | Inscription, double saisie email | `auth/ui/inscription_page.dart` |
+| 7.4 | Disponibilité en direct des trois champs uniques | idem, saisie débattue à 550 ms |
+| 3.3 / 7.2 | Connexion par **username** | `auth/ui/connexion_page.dart` |
+| 3.4 / 7.2 | Activation par code à six chiffres | `auth/ui/verification_email_page.dart` |
+| 7.2 | Changement et réinitialisation du mot de passe | `auth/ui/mot_de_passe*.dart` |
+| 4 / 7.5 | Wizard en quatre étapes | `demande/ui/wizard_page.dart` |
+| 4-2 / 7.5 | Photo (étape 1), diplômes (étape 2) | `demande/ui/etapes/pieces_jointes.dart` |
+| 7.6 | Bloc `fichiers`, URLs absolues et encodées | `demande/data/demande_mapper.dart` |
+| 3.1 / 8.3 | Résumé du dossier en lecture seule | `demande/ui/resume_page.dart` |
+| 8.8 | Brouillon local | `demande/data/brouillon_store.dart` |
+| 8.9 | Validation du téléphone SN + international | `demande/domain/telephone.dart` |
+| 2.2 | `recruted` affiché au candidat | `demande/ui/accueil_page.dart` |
+
+### Les pièces jointes
+
+**La photo ouvre l'étape 1**, avec l'état civil : c'est une pièce d'identité,
+pas un justificatif de parcours. Le formulaire web la place à l'étape 2 ; la
+correspondance champ → étape du §8.7 a été recalée en conséquence, pour qu'un
+422 sur `photo_profil` renvoie là où le champ se trouve réellement. Elle se
+choisit dans la photothèque uniquement : un portrait d'identité se prépare, il
+ne s'improvise pas devant l'appareil au milieu d'un formulaire.
+
+**Le CV n'est plus demandé** : le serveur doit le produire à partir du dossier,
+qui contient déjà tout. `TypeFichier.cv` et les appels correspondants restent
+en place — un CV déposé auparavant continue de s'afficher dans le résumé — et
+`TypeFichier.proposes` est le seul point à modifier pour le rétablir.
+
+Deux comportements côté serveur (§4, §7.5) :
+
+- **avant le premier enregistrement**, les fichiers sont mis en file et partent
+  avec le dossier, comme le fait le formulaire web (§7.7b) ;
+- **ensuite**, ajout et suppression passent par les endpoints dédiés.
+
+Une seule règle vue de l'écran : on choisit, et tout part à l'enregistrement.
+Les contraintes serveur sont vérifiées **avant** l'envoi
+(`demande/domain/regles_fichiers.dart`) — un refus après une minute de
+téléversement sur un réseau instable est la meilleure façon de perdre un
+candidat. Les photos sont compressées par paliers jusqu'à passer sous 2 Mo
+(§6.2 D5).
+
+Deux pièges du cadrage sont traités ici : les diplômes et CV **refusent les
+images** (§6.2 D4) — le message le dit et propose la conversion en PDF ; et
+les noms de fichiers du serveur portent espaces et accents non assainis, d'où
+l'encodage systématique des URLs (§8.9).
+
 ## Suite des travaux
 
-Livré : socle, authentification, référentiel en cache, design, onboarding, et
-**le wizard en quatre étapes** — saisie complète, brouillon local, cascades,
-enregistrement et routage des erreurs serveur.
-
-Reste à faire, par ordre de dépendance :
-
-1. **Pièces jointes** — diplômes, CV et photo de profil. `multipart` en
-   notation à crochets (§8.6), compression avant envoi (plafond serveur :
-   2 Mo par fichier), et suppression via `deleted_files`.
-2. **Résumé du dossier** en lecture seule, équivalent de `userdata.summary`.
-3. **Changement de mot de passe** et mot de passe oublié (§7.2).
-4. **Branchement sur l'API réelle** : `--dart-define=USE_MOCKS=false`, une fois
+1. **Branchement sur l'API réelle** : `--dart-define=USE_MOCKS=false`, une fois
    les bloqueurs §6.1 levés côté backend.
+2. **Revalidation du référentiel par `ETag`** (§5.6) : aujourd'hui le cache est
+   rafraîchi en arrière-plan à chaque lancement, sans `If-None-Match`. À faire
+   quand l'endpoint existera et exposera l'en-tête.
+3. **Statut du dossier** (§6.2 D3) : `brouillon` / `soumise` / `traitée`
+   n'existe pas en base. L'app affiche donc une complétude, pas un suivi.
 
-### Le wizard
+### Écarts assumés
 
-```
-lib/features/demande/
-├── domain/      Demande (agrégat immuable), Formation, Experience, EtapeWizard
-├── data/        DemandeApi (+ mock), DemandeMapper, BrouillonStore
-├── application/ DemandeController
-└── ui/          WizardPage + etapes/{identite,formations,experiences,voeux}
-```
-
-Quatre partis pris structurent l'ensemble :
-
-**Un seul point de mutation.** `DemandeController.modifier((d) => d.copyWith(…))`
-est la seule écriture possible. Trente champs auraient donné trente méthodes ;
-une transformation sur un agrégat immuable en donne une — et rien ne peut
-contourner la sauvegarde du brouillon qu'elle déclenche.
-
-**Les écrans d'étape ne détiennent aucun état.** Ils reçoivent le dossier, le
-référentiel, les erreurs serveur et la fonction de modification. Ce sont des
-fonctions pures de l'état : testables, et impossibles à désynchroniser.
-
-**Quatre composants de saisie couvrent les trente champs.** `ChampTexte`,
-`ChampSelection`, `ChampDate` et `ChoixSegmente` dans `core/ui/champs.dart`,
-plus `ListeDynamique` pour les formations et expériences — qui ont exactement
-le même comportement. Les écrans ne décrivent plus que *quoi* saisir.
-
-**La navigation entre étapes est libre.** Le dossier est un brouillon tant
-qu'il n'est pas envoyé ; bloquer l'avance sur un champ manquant ne ferait que
-coincer un candidat qui veut y revenir. Le contrôle a lieu à l'enregistrement,
-et renvoie sur l'étape fautive — c'est à cela que sert `EtapeWizard.pourChamp`
-(§8.7), aussi bien pour les champs obligatoires que pour un 422 du serveur.
+- **`permission_handler` n'est pas installé**, contrairement au §8.2.
+  `image_picker` passe par le sélecteur photo d'Android 13+ et `file_picker`
+  par le *Storage Access Framework* : aucun des deux ne demande de permission
+  d'accès au stockage. Seule la caméra en exige une, et le plugin s'en charge.
+  Ajouter la dépendance sans l'utiliser ne ferait qu'alourdir l'APK.
+- **§6.1 B5** — les routes serveur de la photo de profil sont cassées
+  (`ArgumentCountError`). L'app appelle `POST /demande/photo` tel que spécifié
+  au §7.5 ; le correctif est attendu côté backend.
 
 ### À trancher
 

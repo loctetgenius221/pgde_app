@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import '../../../core/ui/form_submission.dart';
 import '../../../core/ui/icone.dart';
 import '../../../core/ui/responsive.dart';
 import '../application/auth_controller.dart';
+import '../data/auth_api.dart';
 
 /// Création de compte — règles exactes de `AuthController::register` (§3.2).
 ///
@@ -35,8 +38,54 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
   final _password = TextEditingController();
   final _passwordConfirmation = TextEditingController();
 
+  /// §7.4 — disponibilité d'un identifiant, interrogée pendant la saisie.
+  ///
+  /// Trois champs du formulaire portent une contrainte d'unicité en base
+  /// (`username`, `email`, `numberid`). Les découvrir au moment du 422, après
+  /// huit champs remplis, est la meilleure façon de perdre un candidat.
+  final Map<String, bool> _disponible = <String, bool>{};
+  final Map<String, Timer> _verifications = <String, Timer>{};
+
+  void _verifierDisponibilite(String champ, String valeur) {
+    _verifications.remove(champ)?.cancel();
+    final String propre = valeur.trim();
+    if (propre.length < 3) {
+      if (_disponible.remove(champ) != null) setState(() {});
+      return;
+    }
+    // On laisse retomber la frappe : une requête par caractère saturerait le
+    // point d'entrée, que le cadrage demande justement de throttler.
+    _verifications[champ] = Timer(
+      const Duration(milliseconds: 550),
+      () async {
+        try {
+          final bool libre = await ref
+              .read(authApiProvider)
+              .estDisponible(
+                username: champ == 'username' ? propre : null,
+                email: champ == 'email' ? propre : null,
+                numberid: champ == 'numberid' ? propre : null,
+              );
+          if (mounted) setState(() => _disponible[champ] = libre);
+        } on Object catch (_) {
+          // Hors ligne : on ne dit rien. Le serveur tranchera à l'envoi.
+          if (mounted) setState(() => _disponible.remove(champ));
+        }
+      },
+    );
+  }
+
+  String? _indisponible(String champ) =>
+      _disponible[champ] == false ? 'Déjà utilisé.' : null;
+
+  String? _aideDisponibilite(String champ, [String? sinon]) =>
+      _disponible[champ] == true ? 'Disponible' : sinon;
+
   @override
   void dispose() {
+    for (final Timer t in _verifications.values) {
+      t.cancel();
+    }
     for (final c in <TextEditingController>[
       _prenom,
       _nom,
@@ -144,10 +193,13 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     inputFormatters: <TextInputFormatter>[
                       FilteringTextInputFormatter.digitsOnly,
                     ],
+                    onChanged: (v) => _verifierDisponibilite('numberid', v),
                     decoration: InputDecoration(
                       labelText: 'Numéro de CNI ou de passeport',
                       prefixIcon: const PrefixeChamp(Icones.piece),
-                      errorText: erreurDuChamp('numberid'),
+                      helperText: _aideDisponibilite('numberid'),
+                      errorText:
+                          erreurDuChamp('numberid') ?? _indisponible('numberid'),
                     ),
                     validator: (v) => _obligatoire(v, 'numéro de CNI'),
                   ),
@@ -157,11 +209,16 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     controller: _username,
                     autocorrect: false,
                     textInputAction: TextInputAction.next,
+                    onChanged: (v) => _verifierDisponibilite('username', v),
                     decoration: InputDecoration(
                       labelText: "Nom d'utilisateur",
-                      helperText: 'C’est avec lui que vous vous connecterez',
+                      helperText: _aideDisponibilite(
+                        'username',
+                        'C’est avec lui que vous vous connecterez',
+                      ),
                       prefixIcon: const PrefixeChamp(Icones.identifiant),
-                      errorText: erreurDuChamp('username'),
+                      errorText:
+                          erreurDuChamp('username') ?? _indisponible('username'),
                     ),
                     validator: (v) => _obligatoire(v, "nom d'utilisateur"),
                   ),
@@ -171,10 +228,12 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
                     textInputAction: TextInputAction.next,
+                    onChanged: (v) => _verifierDisponibilite('email', v),
                     decoration: InputDecoration(
                       labelText: 'Adresse email',
                       prefixIcon: const PrefixeChamp(Icones.email),
-                      errorText: erreurDuChamp('email'),
+                      helperText: _aideDisponibilite('email'),
+                      errorText: erreurDuChamp('email') ?? _indisponible('email'),
                     ),
                     validator: (v) {
                       final valeur = v?.trim() ?? '';

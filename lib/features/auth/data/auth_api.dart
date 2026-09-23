@@ -35,6 +35,34 @@ abstract interface class AuthApi {
   Future<void> logout();
 
   Future<void> resendVerificationEmail();
+
+  /// §3.4 — option OTP, recommandée face au lien signé du web : un code à six
+  /// chiffres se saisit dans l'app, sans dépendre d'un deep link.
+  Future<Utilisateur> verifierAvecCode(String code);
+
+  // --- Mot de passe (§7.2) ---
+
+  Future<void> changerMotDePasse({
+    required String actuel,
+    required String nouveau,
+  });
+
+  /// §7.2 — l'email **et** le numéro de pièce sont demandés : deux facteurs
+  /// pour une plateforme où l'email n'est pas l'identifiant de connexion.
+  Future<void> demanderReinitialisation({
+    required String email,
+    required String numberid,
+  });
+
+  Future<void> reinitialiser({
+    required String jeton,
+    required String email,
+    required String motDePasse,
+  });
+
+  /// §7.4 — disponibilité d'un identifiant avant l'inscription, pour éviter un
+  /// 422 après un formulaire de huit champs.
+  Future<bool> estDisponible({String? username, String? email, String? numberid});
 }
 
 class HttpAuthApi implements AuthApi {
@@ -104,6 +132,75 @@ class HttpAuthApi implements AuthApi {
 
   @override
   Future<void> resendVerificationEmail() => _client.post('/auth/email/resend');
+
+  @override
+  Future<Utilisateur> verifierAvecCode(String code) async {
+    final json =
+        await _client.post(
+              '/auth/email/verify',
+              body: <String, dynamic>{'code': code},
+            )
+            as Json;
+    return Utilisateur.fromJson(json['user']! as Json);
+  }
+
+  @override
+  Future<void> changerMotDePasse({
+    required String actuel,
+    required String nouveau,
+  }) => _client.post(
+    '/auth/password/change',
+    body: <String, dynamic>{
+      'current_password': actuel,
+      'new_password': nouveau,
+      'new_password_confirmation': nouveau,
+    },
+  );
+
+  @override
+  Future<void> demanderReinitialisation({
+    required String email,
+    required String numberid,
+  }) => _client.post(
+    '/auth/password/forgot',
+    body: <String, dynamic>{'email': email, 'numberid': numberid},
+  );
+
+  @override
+  Future<void> reinitialiser({
+    required String jeton,
+    required String email,
+    required String motDePasse,
+  }) => _client.post(
+    '/auth/password/reset',
+    body: <String, dynamic>{
+      'token': jeton,
+      'email': email,
+      'password': motDePasse,
+      'password_confirmation': motDePasse,
+    },
+  );
+
+  @override
+  Future<bool> estDisponible({
+    String? username,
+    String? email,
+    String? numberid,
+  }) async {
+    final json =
+        await _client.get(
+              '/availability',
+              // Un seul des trois est renseigné à la fois ; les éléments
+              // null-aware écartent les autres.
+              query: <String, dynamic>{
+                'username': ?username,
+                'email': ?email,
+                'numberid': ?numberid,
+              },
+            )
+            as Json;
+    return json['available'] == true;
+  }
 }
 
 /// Point de bascule unique entre le faux backend et le vrai (§ADR-001).

@@ -123,8 +123,10 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                               _motDePasseVisible
                                   ? Icones.masquer
                                   : Icones.afficher,
-                              taille: 20,
-                              couleur: theme.colorScheme.onSurfaceVariant,
+                              taille: StyleIcone.suffixe,
+                              epaisseur: StyleIcone.traitChamp,
+                              couleur: theme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: StyleIcone.opaciteChamp),
                             ),
                             onPressed: () => setState(
                               () => _motDePasseVisible = !_motDePasseVisible,
@@ -138,7 +140,16 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                           ? 'Saisissez votre mot de passe'
                           : null,
                     ),
-                    const SizedBox(height: Espace.lg),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: envoiEnCours
+                            ? null
+                            : () => context.push(Routes.motDePasseOublie),
+                        child: const Text('Mot de passe oublié ?'),
+                      ),
+                    ),
+                    const SizedBox(height: Espace.xs),
 
                     FilledButton(
                       onPressed: envoiEnCours ? null : _connecter,

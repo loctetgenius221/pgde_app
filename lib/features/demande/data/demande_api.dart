@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
@@ -20,6 +23,28 @@ abstract interface class DemandeApi {
   Future<Demande> creer(Demande demande);
 
   Future<Demande> mettreAJour(Demande demande);
+
+  // --- Pièces jointes (§7.5) ---
+  //
+  // Elles vivent sur la même ressource `/demande` et dans le même dossier
+  // serveur : les séparer dans une seconde interface obligerait les deux
+  // implémentations à se partager un état. La cohésion l'emporte ici sur le
+  // découpage.
+
+  /// Remplace la photo de profil. Le serveur n'en garde qu'une (§2.3).
+  Future<Demande> deposerPhoto(File fichier);
+
+  /// Ajoute des diplômes ou des CV au dossier.
+  Future<Demande> deposerDocuments({
+    required TypeFichier type,
+    required List<File> fichiers,
+  });
+
+  /// Retire une pièce. [chemin] est le `path` renvoyé par l'API, jamais l'URL.
+  Future<Demande> supprimerFichier({
+    required TypeFichier type,
+    required String chemin,
+  });
 }
 
 class HttpDemandeApi implements DemandeApi {
@@ -49,6 +74,58 @@ class HttpDemandeApi implements DemandeApi {
     await _client.put('/demande', body: DemandeMapper.versCorps(demande))
         as Json,
   );
+
+  @override
+  Future<Demande> deposerPhoto(File fichier) async {
+    final FormData corps = FormData();
+    corps.files.add(
+      MapEntry(
+        'photo_profil',
+        await MultipartFile.fromFile(fichier.path, filename: _nomDe(fichier)),
+      ),
+    );
+    return DemandeMapper.depuisApi(
+      await _client.post('/demande/photo', body: corps) as Json,
+    );
+  }
+
+  @override
+  Future<Demande> deposerDocuments({
+    required TypeFichier type,
+    required List<File> fichiers,
+  }) async {
+    // §8.6 : Laravel attend la **même clé répétée**, suffixée de crochets —
+    // `diplome_file[]`, et non un tableau JSON.
+    final String cle = '${type.wire}_file[]';
+    final FormData corps = FormData();
+    for (final File fichier in fichiers) {
+      corps.files.add(
+        MapEntry(
+          cle,
+          await MultipartFile.fromFile(fichier.path, filename: _nomDe(fichier)),
+        ),
+      );
+    }
+    return DemandeMapper.depuisApi(
+      await _client.post('/demande/files', body: corps) as Json,
+    );
+  }
+
+  @override
+  Future<Demande> supprimerFichier({
+    required TypeFichier type,
+    required String chemin,
+  }) async => DemandeMapper.depuisApi(
+    await _client.delete(
+          '/demande/files',
+          body: <String, dynamic>{'type': type.wire, 'path': chemin},
+        )
+        as Json,
+  );
+
+  /// Nom de fichier, quel que soit le séparateur de la plateforme.
+  static String _nomDe(File fichier) =>
+      fichier.path.split(RegExp(r'[\/]')).last;
 }
 
 final demandeApiProvider = Provider<DemandeApi>(

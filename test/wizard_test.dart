@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -27,6 +29,28 @@ class _FauxDemandeApi implements DemandeApi {
   @override
   Future<Demande> mettreAJour(Demande demande) async =>
       _envoyer(demande, id: demande.id);
+
+  // Les pièces jointes ne sont pas l'objet de ces tests : on enregistre ce qui
+  // est demandé, sans toucher au dossier.
+  List<File> photosDeposees = <File>[];
+
+  @override
+  Future<Demande> deposerPhoto(File fichier) async {
+    photosDeposees.add(fichier);
+    return dossier ?? const Demande();
+  }
+
+  @override
+  Future<Demande> deposerDocuments({
+    required TypeFichier type,
+    required List<File> fichiers,
+  }) async => dossier ?? const Demande();
+
+  @override
+  Future<Demande> supprimerFichier({
+    required TypeFichier type,
+    required String chemin,
+  }) async => dossier ?? const Demande();
 
   Demande _envoyer(Demande demande, {int? id}) {
     dernierEnvoi = demande;
@@ -83,9 +107,13 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
   await tester.tap(find.text('Se connecter'));
   await tester.pumpAndSettle();
 
-  // Depuis l'accueil, on entre dans le dossier. Le libellé du bouton dépend
-  // de l'état du dossier : on vise le bouton, pas son texte.
-  await tester.tap(find.byType(FilledButton).first);
+  // Depuis l'accueil, on entre dans le formulaire. Un dossier déjà déposé
+  // ouvre d'abord le résumé : c'est « Modifier » qui mène au wizard.
+  await tester.tap(
+    dossier == null
+        ? find.byType(FilledButton).first
+        : find.text('Modifier mon dossier'),
+  );
   await tester.pumpAndSettle();
 
   return api;

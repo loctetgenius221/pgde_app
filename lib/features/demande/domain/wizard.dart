@@ -32,10 +32,13 @@ enum EtapeWizard {
     'regionresidence_id': identite,
     'departementresidence_id': identite,
     'handicap_id': identite,
+    // La photo est saisie à l'étape 1 dans l'app, alors que le formulaire web
+    // la place à l'étape 2 (§4). C'est l'écran qui fait foi pour renvoyer
+    // l'utilisateur au bon endroit après un 422.
+    'photo_profil': identite,
     'formations': formations,
     'diplome_file': formations,
     'cv_file': formations,
-    'photo_profil': formations,
     'hasExperience': experiences,
     'experiences': experiences,
     'emploi1_id': voeux,

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/brouillon_store.dart';
 import '../data/demande_api.dart';
+import '../data/selecteur_fichiers.dart';
 import '../domain/demande.dart';
 
 /// Détient le dossier en cours d'édition.
@@ -64,8 +66,57 @@ class DemandeController extends AsyncNotifier<Demande> {
         ? await api.mettreAJour(actuel)
         : await api.creer(actuel);
 
+    // Le formulaire est sauvé : on le publie et on purge le brouillon avant
+    // de toucher aux pièces. Si un fichier est refusé ensuite, l'utilisateur
+    // ne doit pas croire que sa saisie est perdue.
     await ref.read(brouillonStoreProvider).purger();
     state = AsyncData(enregistre);
+
+    state = AsyncData(await _deposerLesPiecesEnAttente(enregistre));
+  }
+
+  /// Dépose les pièces mises en file. Elles ne peuvent partir qu'après la
+  /// création du dossier : les endpoints du §7.5 s'attachent à une `userdata`
+  /// existante.
+  Future<Demande> _deposerLesPiecesEnAttente(Demande dossier) async {
+    final PiecesEnAttente file = ref.read(piecesEnAttenteProvider);
+    if (file.estVide) return dossier;
+
+    final DemandeApi api = ref.read(demandeApiProvider);
+    Demande courant = dossier;
+
+    final File? photo = file.photo;
+    if (photo != null) courant = await api.deposerPhoto(photo);
+
+    for (final TypeFichier type in TypeFichier.values) {
+      final List<File> fichiers = file.de(type);
+      if (fichiers.isEmpty) continue;
+      courant = await api.deposerDocuments(type: type, fichiers: fichiers);
+    }
+
+    ref.read(piecesEnAttenteProvider.notifier).vider();
+    return courant;
+  }
+
+  /// Retire une pièce déjà déposée sur le serveur.
+  ///
+  /// La réponse porte l'état **serveur** du dossier : l'adopter en entier
+  /// écraserait les modifications du formulaire pas encore enregistrées. On
+  /// n'en reprend donc que la liste des pièces.
+  Future<void> retirerPiece(TypeFichier type, String chemin) async {
+    final Demande retour = await ref
+        .read(demandeApiProvider)
+        .supprimerFichier(type: type, chemin: chemin);
+    modifier((d) => d.avecFichiers(type, retour.fichiersDe(type)));
+  }
+
+  /// Remplace la photo d'un dossier déjà enregistré (§3.1, « Changer la
+  /// photo »).
+  Future<void> remplacerPhoto(File fichier) async {
+    final Demande retour = await ref
+        .read(demandeApiProvider)
+        .deposerPhoto(fichier);
+    modifier((d) => d.copyWith(photo: retour.photo));
   }
 
   /// Abandonne les modifications locales et repart de l'état serveur.

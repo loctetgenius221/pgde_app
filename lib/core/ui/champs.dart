@@ -176,14 +176,7 @@ class ChampSelection<T> extends StatelessWidget {
           errorText: erreur,
           enabled: _actif,
           prefixIcon: icone == null ? null : PrefixeChamp(icone!),
-          suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: Espace.md),
-            child: Icone(
-              HugeIcons.strokeRoundedArrowDown01,
-              taille: 20,
-              couleur: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedArrowDown01),
         ),
         child: Text(
           vide ? 'Sélectionner' : etiquette(valeur as T),
@@ -271,9 +264,7 @@ class _FeuilleSelectionState<T> extends State<_FeuilleSelection<T>> {
                     autofocus: true,
                     decoration: const InputDecoration(
                       hintText: 'Rechercher…',
-                      prefixIcon: PrefixeChamp(
-                        HugeIcons.strokeRoundedSearch01,
-                      ),
+                      prefixIcon: PrefixeChamp(HugeIcons.strokeRoundedSearch01),
                     ),
                     onChanged: (v) => setState(() => _filtre = v),
                   ),
@@ -421,14 +412,7 @@ class ChampDate extends StatelessWidget {
           labelText: libelle,
           errorText: erreur,
           prefixIcon: icone == null ? null : PrefixeChamp(icone!),
-          suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: Espace.md),
-            child: Icone(
-              HugeIcons.strokeRoundedCalendar03,
-              taille: 20,
-              couleur: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedCalendar03),
         ),
         child: Text(
           valeur == null

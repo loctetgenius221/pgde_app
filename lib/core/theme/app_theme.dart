@@ -156,12 +156,21 @@ abstract final class AppTheme {
       primaryContainer: clair ? AppColors.vertPale : const Color(0xFF00603A),
       onPrimaryContainer: clair ? const Color(0xFF00301A) : AppColors.vertPale,
 
-      // Le jaune n'est jamais une action : il sert de fond d'accent, avec du
-      // texte anthracite dessus — un jaune de marque ne porte pas de blanc.
+      // **Un seul jaune, #FFCC34, et aucune variante.**
+      //
+      // Les quatre rôles « secondary » sont recalés sur la même valeur. Sans
+      // cela, `fromSeed` en dérive des teintes voisines — un jaune pâle pour
+      // `secondaryContainer`, un brun pour `onSecondaryContainer` — que
+      // Material 3 applique ensuite tout seul, notamment au fond des segments
+      // sélectionnés d'un `SegmentedButton`. Deux jaunes cohabitaient donc à
+      // l'écran sans que personne les ait choisis.
+      //
+      // Le texte posé dessus est toujours anthracite : un jaune de marque ne
+      // porte pas de blanc.
       secondary: AppColors.jaune,
       onSecondary: AppColors.anthracite,
-      secondaryContainer: clair ? AppColors.jaunePale : const Color(0xFF574400),
-      onSecondaryContainer: clair ? const Color(0xFF3D2F00) : AppColors.jaunePale,
+      secondaryContainer: AppColors.jaune,
+      onSecondaryContainer: AppColors.anthracite,
 
       error: clair ? AppColors.rouge : const Color(0xFFFF8A8C),
       onError: clair ? Colors.white : const Color(0xFF5C0004),

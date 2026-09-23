@@ -40,6 +40,14 @@ class MockAuthApi implements AuthApi {
 
   static String? _connecte;
 
+  /// Emails ayant demandé une réinitialisation.
+  static final Set<String> _jetonsEmis = <String>{};
+
+  /// Code accepté par le faux backend, pour la vérification d'email comme
+  /// pour la réinitialisation. En local `MAIL_MAILER=log` n'envoie rien
+  /// (§3.4) : sans code fixe, aucun de ces parcours ne serait démontrable.
+  static const String codeDeDemonstration = '123456';
+
   @override
   Future<void> register({
     required String firstname,
@@ -124,16 +132,117 @@ class MockAuthApi implements AuthApi {
   @override
   Future<void> resendVerificationEmail() async {
     await Future<void>.delayed(_latence);
-    // Raccourci de développement assumé : en local `MAIL_MAILER=log`, aucun
-    // mail ne part (§3.4). Le renvoi active donc directement le compte, pour
-    // que le parcours complet soit parcourable sans serveur de mail.
-    final compte = _comptes[_connecte];
-    if (compte != null) {
-      _comptes[_connecte!] = _Compte(
-        motDePasse: compte.motDePasse,
-        utilisateur: compte.utilisateur.copyWith(enabled: true),
+    // Le renvoi n'active plus rien : c'est le code saisi qui active le compte
+    // (§3.4, option OTP). En local `MAIL_MAILER=log` n'envoie aucun mail,
+    // d'où le [codeDeDemonstration] fixe.
+  }
+
+  @override
+  Future<Utilisateur> verifierAvecCode(String code) async {
+    await Future<void>.delayed(_latence);
+    if (code.trim() != codeDeDemonstration) {
+      throw const ApiException(
+        'Code incorrect.',
+        statusCode: 422,
+        fieldErrors: <String, List<String>>{
+          'code': <String>['Ce code est invalide ou a expiré.'],
+        },
       );
     }
+    final _Compte compte = _compteConnecte();
+    final Utilisateur active = compte.utilisateur.copyWith(enabled: true);
+    _comptes[_connecte!] = _Compte(
+      motDePasse: compte.motDePasse,
+      utilisateur: active,
+    );
+    return active;
+  }
+
+  @override
+  Future<void> changerMotDePasse({
+    required String actuel,
+    required String nouveau,
+  }) async {
+    await Future<void>.delayed(_latence);
+    final _Compte compte = _compteConnecte();
+    if (compte.motDePasse != actuel) {
+      throw const ApiException(
+        'Mot de passe actuel incorrect.',
+        statusCode: 422,
+        fieldErrors: <String, List<String>>{
+          'current_password': <String>['Ce mot de passe ne correspond pas.'],
+        },
+      );
+    }
+    _comptes[_connecte!] = _Compte(
+      motDePasse: nouveau,
+      utilisateur: compte.utilisateur,
+    );
+  }
+
+  @override
+  Future<void> demanderReinitialisation({
+    required String email,
+    required String numberid,
+  }) async {
+    await Future<void>.delayed(_latence);
+    // §7.2 : les deux doivent correspondre au **même** compte. Répondre
+    // différemment selon que l'email existe ou non révélerait qui est inscrit.
+    final bool trouve = _comptes.values.any(
+      (c) => c.utilisateur.email == email && c.utilisateur.numberid == numberid,
+    );
+    if (trouve) _jetonsEmis.add(email);
+  }
+
+  @override
+  Future<void> reinitialiser({
+    required String jeton,
+    required String email,
+    required String motDePasse,
+  }) async {
+    await Future<void>.delayed(_latence);
+    if (jeton.trim() != codeDeDemonstration || !_jetonsEmis.contains(email)) {
+      throw const ApiException(
+        'Lien de réinitialisation invalide ou expiré.',
+        statusCode: 422,
+        fieldErrors: <String, List<String>>{
+          'token': <String>['Ce code est invalide ou a expiré.'],
+        },
+      );
+    }
+    final MapEntry<String, _Compte> entree = _comptes.entries.firstWhere(
+      (e) => e.value.utilisateur.email == email,
+    );
+    _comptes[entree.key] = _Compte(
+      motDePasse: motDePasse,
+      utilisateur: entree.value.utilisateur,
+    );
+    _jetonsEmis.remove(email);
+  }
+
+  @override
+  Future<bool> estDisponible({
+    String? username,
+    String? email,
+    String? numberid,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (username != null) return !_comptes.containsKey(username.toLowerCase());
+    if (email != null) {
+      return !_comptes.values.any((c) => c.utilisateur.email == email);
+    }
+    if (numberid != null) {
+      return !_comptes.values.any((c) => c.utilisateur.numberid == numberid);
+    }
+    return true;
+  }
+
+  _Compte _compteConnecte() {
+    final _Compte? compte = _comptes[_connecte];
+    if (compte == null) {
+      throw const ApiException('Non authentifié.', statusCode: 401);
+    }
+    return compte;
   }
 }
 

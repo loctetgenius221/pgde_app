@@ -6,6 +6,22 @@ part of 'demande.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
+_FichierJoint _$FichierJointFromJson(Map<String, dynamic> json) =>
+    _FichierJoint(
+      chemin: json['chemin'] as String,
+      url: json['url'] as String,
+      nom: json['nom'] as String? ?? '',
+      taille: (json['taille'] as num?)?.toInt(),
+    );
+
+Map<String, dynamic> _$FichierJointToJson(_FichierJoint instance) =>
+    <String, dynamic>{
+      'chemin': instance.chemin,
+      'url': instance.url,
+      'nom': instance.nom,
+      'taille': instance.taille,
+    };
+
 _Formation _$FormationFromJson(Map<String, dynamic> json) => _Formation(
   academicId: (json['academicId'] as num).toInt(),
   diplome: json['diplome'] as String? ?? '',
@@ -65,6 +81,19 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
           ?.map((e) => Formation.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const <Formation>[],
+  diplomes:
+      (json['diplomes'] as List<dynamic>?)
+          ?.map((e) => FichierJoint.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const <FichierJoint>[],
+  cv:
+      (json['cv'] as List<dynamic>?)
+          ?.map((e) => FichierJoint.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const <FichierJoint>[],
+  photo: json['photo'] == null
+      ? null
+      : FichierJoint.fromJson(json['photo'] as Map<String, dynamic>),
   aDeLExperience: json['aDeLExperience'] as bool? ?? false,
   experiences:
       (json['experiences'] as List<dynamic>?)
@@ -97,6 +126,9 @@ Map<String, dynamic> _$DemandeToJson(_Demande instance) => <String, dynamic>{
   'departementResidenceId': instance.departementResidenceId,
   'handicapId': instance.handicapId,
   'formations': instance.formations.map((e) => e.toJson()).toList(),
+  'diplomes': instance.diplomes.map((e) => e.toJson()).toList(),
+  'cv': instance.cv.map((e) => e.toJson()).toList(),
+  'photo': instance.photo?.toJson(),
   'aDeLExperience': instance.aDeLExperience,
   'experiences': instance.experiences.map((e) => e.toJson()).toList(),
   'emploi1Id': instance.emploi1Id,

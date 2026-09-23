@@ -30,6 +30,66 @@ enum SituationMatrimoniale {
   final String wire;
 }
 
+/// Nature d'une pièce jointe — elle décide de l'endpoint et des formats admis.
+enum TypeFichier {
+  diplome('diplome', 'Diplôme'),
+  cv('cv', 'CV');
+
+  const TypeFichier(this.wire, this.libelle);
+
+  final String wire;
+  final String libelle;
+
+  /// Types réellement proposés à la saisie aujourd'hui.
+  ///
+  /// §4 en prévoit deux, mais le **CV est retiré du formulaire** : il doit
+  /// être produit par le serveur à partir des informations du dossier, qui les
+  /// contient toutes. Le type et les appels restent en place — la lecture d'un
+  /// CV déposé auparavant continue de fonctionner — pour que le rétablir ne
+  /// coûte qu'une ligne.
+  static const List<TypeFichier> proposes = <TypeFichier>[TypeFichier.diplome];
+}
+
+/// Un fichier déposé sur le serveur (§7.6, bloc `fichiers`).
+///
+/// [chemin] est conservé en plus de [url] : c'est **lui** que le serveur
+/// attend pour une suppression, jamais l'URL absolue.
+@freezed
+abstract class FichierJoint with _$FichierJoint {
+  const factory FichierJoint({
+    required String chemin,
+    required String url,
+    @Default('') String nom,
+    int? taille,
+  }) = _FichierJoint;
+
+  const FichierJoint._();
+
+  factory FichierJoint.fromJson(Map<String, dynamic> json) =>
+      _$FichierJointFromJson(json);
+
+  /// §8.9 — les noms de fichiers du serveur contiennent espaces et accents
+  /// non assainis : une URL brute casse le téléchargement et l'affichage.
+  String get urlSure => Uri.encodeFull(url);
+
+  /// Nom lisible, déduit du chemin quand le serveur n'en fournit pas.
+  String get nomAffiche {
+    if (nom.isNotEmpty) return nom;
+    final String dernier = chemin.split('/').last;
+    // Le serveur préfixe par `time() . '_'` (§4) : on retire cet horodatage.
+    final int separateur = dernier.indexOf('_');
+    return separateur == -1 ? dernier : dernier.substring(separateur + 1);
+  }
+
+  String get tailleLisible {
+    final int? octets = taille;
+    if (octets == null) return '';
+    if (octets < 1024) return '$octets o';
+    if (octets < 1024 * 1024) return '${(octets / 1024).round()} Ko';
+    return '${(octets / (1024 * 1024)).toStringAsFixed(1)} Mo';
+  }
+}
+
 /// Une ligne de la liste dynamique « formations » (§4, étape 2).
 @freezed
 abstract class Formation with _$Formation {
@@ -112,8 +172,15 @@ abstract class Demande with _$Demande {
     int? departementResidenceId,
     int? handicapId,
 
-    // --- Étape 2 : formations ---
+    // --- Étape 2 : formations et pièces jointes ---
     @Default(<Formation>[]) List<Formation> formations,
+
+    // Les pièces vivent sur le serveur, déposées par des appels dédiés
+    // (§7.5). Elles ne partent donc **pas** dans le corps du formulaire : on
+    // les garde ici pour l'affichage et la suppression.
+    @Default(<FichierJoint>[]) List<FichierJoint> diplomes,
+    @Default(<FichierJoint>[]) List<FichierJoint> cv,
+    FichierJoint? photo,
 
     // --- Étape 3 : expériences ---
     @Default(false) bool aDeLExperience,
@@ -136,6 +203,14 @@ abstract class Demande with _$Demande {
   /// Expériences telles que le serveur les conservera (§4, étape 3).
   List<Experience> get experiencesRetenues =>
       aDeLExperience ? experiences.where((e) => e.estSignificative).toList() : const [];
+
+  List<FichierJoint> fichiersDe(TypeFichier type) =>
+      type == TypeFichier.diplome ? diplomes : cv;
+
+  Demande avecFichiers(TypeFichier type, List<FichierJoint> fichiers) =>
+      type == TypeFichier.diplome
+      ? copyWith(diplomes: fichiers)
+      : copyWith(cv: fichiers);
 
   /// §5.1 — hors Sénégal : on demande le pays et on masque le département.
   bool get resideHorsSenegal => regionResidenceId == Region.horsSenegalId;

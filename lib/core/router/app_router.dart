@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/ui/connexion_page.dart';
 import '../../features/auth/ui/inscription_page.dart';
+import '../../features/auth/ui/mot_de_passe_oublie_page.dart';
+import '../../features/auth/ui/mot_de_passe_page.dart';
 import '../../features/auth/ui/verification_email_page.dart';
 import '../../features/demande/domain/wizard.dart';
 import '../../features/demande/ui/accueil_page.dart';
+import '../../features/demande/ui/resume_page.dart';
 import '../../features/demande/ui/wizard_page.dart';
 import '../../features/onboarding/application/onboarding_controller.dart';
 import '../../features/onboarding/ui/onboarding_page.dart';
@@ -19,16 +22,24 @@ abstract final class Routes {
   static const String onboarding = '/onboarding';
   static const String connexion = '/connexion';
   static const String inscription = '/inscription';
+  static const String motDePasseOublie = '/mot-de-passe-oublie';
+  static const String motDePasse = '/mot-de-passe';
   static const String verificationEmail = '/verification-email';
   static const String accueil = '/';
   static const String wizard = '/demande';
+  static const String resume = '/dossier';
 
   /// Ouvre le wizard directement sur une étape.
   static String wizardEtape(EtapeWizard etape) =>
       '$wizard?etape=${etape.numero}';
 }
 
-const Set<String> _routesPubliques = {Routes.connexion, Routes.inscription};
+const Set<String> _routesPubliques = <String>{
+  Routes.connexion,
+  Routes.inscription,
+  // Retrouver son accès ne demande pas d'être connecté — par définition.
+  Routes.motDePasseOublie,
+};
 
 final routerProvider = Provider<GoRouter>((ref) {
   // `GoRouter` n'écoute pas Riverpod : on lui expose un `Listenable` que l'on
@@ -91,8 +102,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.inscription,
         builder: (_, _) => const InscriptionPage(),
       ),
+      GoRoute(
+        path: Routes.motDePasseOublie,
+        builder: (_, _) => const MotDePasseOubliePage(),
+      ),
+      GoRoute(
+        path: Routes.motDePasse,
+        builder: (_, _) => const MotDePassePage(),
+      ),
       _fondu(Routes.verificationEmail, const VerificationEmailPage()),
       _fondu(Routes.accueil, const AccueilPage()),
+      GoRoute(path: Routes.resume, builder: (_, _) => const ResumePage()),
       GoRoute(
         path: Routes.wizard,
         builder: (_, state) => WizardPage(

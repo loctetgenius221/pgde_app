@@ -27,4 +27,13 @@ abstract final class Env {
     'USE_MOCKS',
     defaultValue: true,
   );
+
+  /// Racine du serveur, déduite de [apiBaseUrl] en retirant le suffixe d'API.
+  ///
+  /// Sert à reconstruire l'adresse d'une pièce jointe quand la réponse ne
+  /// donne qu'un chemin relatif. L'API est censée absolutiser les URLs (§7.6),
+  /// mais afficher une image vide parce qu'elle a oublié serait un mauvais
+  /// échange.
+  static String get racineFichiers =>
+      apiBaseUrl.replaceFirst(RegExp(r'/api/v\d+/?$'), '');
 }

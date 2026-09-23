@@ -15,11 +15,18 @@ typedef DonneesIcone = List<List<dynamic>>;
 /// ce qui reviendrait à recopier la couleur du thème dans chaque écran, et à
 /// casser silencieusement le mode sombre le jour où l'une est oubliée.
 class Icone extends StatelessWidget {
-  const Icone(this.icone, {this.taille, this.couleur, super.key});
+  const Icone(
+    this.icone, {
+    this.taille,
+    this.couleur,
+    this.epaisseur = 1.8,
+    super.key,
+  });
 
   final DonneesIcone icone;
   final double? taille;
   final Color? couleur;
+  final double epaisseur;
 
   @override
   Widget build(BuildContext context) {
@@ -27,10 +34,33 @@ class Icone extends StatelessWidget {
     return HugeIcon(
       icon: icone,
       size: taille ?? ambiant.size ?? 22,
-      color: couleur ?? ambiant.color ?? Theme.of(context).colorScheme.onSurface,
-      strokeWidth: 1.8,
+      color:
+          couleur ?? ambiant.color ?? Theme.of(context).colorScheme.onSurface,
+      strokeWidth: epaisseur,
     );
   }
+}
+
+/// Style des icônes dans un champ de saisie.
+///
+/// Les deux extrémités d'un champ n'ont pas le même rôle : le préfixe
+/// **qualifie** le champ et doit se lire, le suffixe n'est qu'un **indicateur**
+/// (chevron, calendrier, œil). Lui donner la même taille qu'au préfixe le fait
+/// concurrencer le texte saisi.
+///
+/// Dans un formulaire de trente champs, une icône n'est qu'un repère : à trait
+/// plein et en gris soutenu, trente repères forment une colonne sombre qui
+/// pèse plus que le texte qu'elle accompagne. D'où un trait plus fin et une
+/// opacité réduite, réglés ici et nulle part ailleurs.
+abstract final class StyleIcone {
+  static const double prefixe = 20;
+  static const double suffixe = 16;
+
+  /// Épaisseur du trait dans un champ, contre 1.8 ailleurs.
+  static const double traitChamp = 1.3;
+
+  /// Opacité appliquée à la couleur de texte secondaire.
+  static const double opaciteChamp = 0.5;
 }
 
 /// Icône placée en tête d'un champ de saisie.
@@ -47,8 +77,34 @@ class PrefixeChamp extends StatelessWidget {
     padding: const EdgeInsets.only(left: 18, right: 10),
     child: Icone(
       icone,
-      taille: 20,
-      couleur: Theme.of(context).colorScheme.onSurfaceVariant,
+      taille: StyleIcone.prefixe,
+      epaisseur: StyleIcone.traitChamp,
+      couleur: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
+        alpha: StyleIcone.opaciteChamp,
+      ),
+    ),
+  );
+}
+
+/// Icône placée en fin de champ : chevron d'une liste, calendrier d'une date.
+///
+/// Même décalage que [PrefixeChamp], pour ne pas entrer dans la courbe de la
+/// pilule, mais plus discrète.
+class SuffixeChamp extends StatelessWidget {
+  const SuffixeChamp(this.icone, {super.key});
+
+  final DonneesIcone icone;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 10, right: 18),
+    child: Icone(
+      icone,
+      taille: StyleIcone.suffixe,
+      epaisseur: StyleIcone.traitChamp,
+      couleur: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
+        alpha: StyleIcone.opaciteChamp,
+      ),
     ),
   );
 }
@@ -102,4 +158,11 @@ abstract final class Icones {
   static const DonneesIcone precedent = HugeIcons.strokeRoundedArrowLeft01;
   static const DonneesIcone suivant = HugeIcons.strokeRoundedArrowRight01;
   static const DonneesIcone valide = HugeIcons.strokeRoundedTick02;
+
+  // --- Pièces jointes ---
+  static const DonneesIcone photo = HugeIcons.strokeRoundedCamera01;
+  static const DonneesIcone galerie = HugeIcons.strokeRoundedImage01;
+  static const DonneesIcone document = HugeIcons.strokeRoundedFile01;
+  static const DonneesIcone modifier = HugeIcons.strokeRoundedNoteEdit;
+  static const DonneesIcone menu = HugeIcons.strokeRoundedMoreVertical;
 }

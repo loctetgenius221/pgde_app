@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../../core/network/api_exception.dart';
 import '../domain/demande.dart';
 import 'demande_api.dart';
@@ -40,6 +42,69 @@ class MockDemandeApi implements DemandeApi {
       throw const ApiException('Dossier introuvable.', statusCode: 404);
     }
     return _dossier = _allerRetour(demande, id: _dossier!.id);
+  }
+
+  @override
+  Future<Demande> deposerPhoto(File fichier) async {
+    await Future<void>.delayed(_latence);
+    // §2.3 : le serveur n'en garde qu'une, la nouvelle remplace l'ancienne.
+    return _majDossier(
+      (d) => d.copyWith(photo: _enregistrer(fichier, 'uploads/photos')),
+    );
+  }
+
+  @override
+  Future<Demande> deposerDocuments({
+    required TypeFichier type,
+    required List<File> fichiers,
+  }) async {
+    await Future<void>.delayed(_latence);
+    final List<FichierJoint> ajoutees = <FichierJoint>[
+      for (final File f in fichiers) _enregistrer(f, 'uploads/${type.wire}'),
+    ];
+    return _majDossier(
+      (d) => d.avecFichiers(type, <FichierJoint>[...d.fichiersDe(type), ...ajoutees]),
+    );
+  }
+
+  @override
+  Future<Demande> supprimerFichier({
+    required TypeFichier type,
+    required String chemin,
+  }) async {
+    await Future<void>.delayed(_latence);
+    return _majDossier(
+      (d) => d.avecFichiers(
+        type,
+        d.fichiersDe(type).where((f) => f.chemin != chemin).toList(),
+      ),
+    );
+  }
+
+  /// Reproduit le nommage serveur : `time() . '_' . nom_original`, non
+  /// assaini — espaces et accents compris (§4). C'est précisément ce qui
+  /// oblige l'app à encoder les URLs avant de les ouvrir.
+  FichierJoint _enregistrer(File fichier, String dossier) {
+    final String nom = fichier.path.split(RegExp(r'[\/]')).last;
+    final String chemin =
+        '$dossier/${DateTime.now().millisecondsSinceEpoch ~/ 1000}_$nom';
+    return FichierJoint(
+      chemin: chemin,
+      url: 'http://mock.local/$chemin',
+      nom: nom,
+      taille: fichier.existsSync() ? fichier.lengthSync() : null,
+    );
+  }
+
+  Demande _majDossier(Demande Function(Demande) transformation) {
+    final Demande? actuel = _dossier;
+    if (actuel == null) {
+      throw const ApiException(
+        'Enregistrez d’abord votre demande avant d’y joindre des pièces.',
+        statusCode: 404,
+      );
+    }
+    return _dossier = transformation(actuel);
   }
 
   /// Simule le trajet complet : sérialisation vers le serveur, puis lecture de

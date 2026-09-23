@@ -284,13 +284,26 @@ class _BarreNavigation extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: envoiEnCours ? null : onPrecedent,
-                        child: const Text('Précédent'),
+                        // Marges resserrées : à deux boutons sur une largeur
+                        // de téléphone, « Précédent » passait à la ligne.
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Espace.xs,
+                          ),
+                        ),
+                        child: const Text(
+                          'Précédent',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                     const SizedBox(width: Espace.sm),
                   ],
+                  // Parts égales : la hiérarchie vient du remplissage, pas de
+                  // la largeur. Deux tiers pour l'action principale ne lui
+                  // apportaient rien et étranglaient l'autre.
                   Expanded(
-                    flex: derniere ? 1 : 2,
                     child: FilledButton.icon(
                       onPressed: envoiEnCours
                           ? null

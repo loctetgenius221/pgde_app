@@ -93,6 +93,29 @@ class _EnTete extends StatelessWidget {
                   utilisateur?.nomComplet ?? '',
                   style: theme.textTheme.headlineSmall,
                 ),
+                // §2.2 — `recruted` est posé par l'administration. C'est la
+                // meilleure nouvelle que puisse recevoir un candidat : elle
+                // n'a pas à rester invisible dans la base.
+                if (utilisateur?.recruted ?? false)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Espace.xxs),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Espace.sm,
+                        vertical: Espace.xxs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(Rayon.pilule),
+                      ),
+                      child: Text(
+                        'Recruté',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -107,11 +130,24 @@ class _EnTete extends StatelessWidget {
               ),
             ),
           ),
-          IconButton(
-            tooltip: 'Se déconnecter',
-            icon: const Icone(Icones.deconnexion),
-            onPressed: () =>
+          PopupMenuButton<_ActionCompte>(
+            tooltip: 'Mon compte',
+            icon: const Icone(Icones.menu),
+            onSelected: (action) => switch (action) {
+              _ActionCompte.motDePasse => context.push(Routes.motDePasse),
+              _ActionCompte.deconnexion =>
                 ref.read(authControllerProvider.notifier).deconnexion(),
+            },
+            itemBuilder: (_) => const <PopupMenuEntry<_ActionCompte>>[
+              PopupMenuItem<_ActionCompte>(
+                value: _ActionCompte.motDePasse,
+                child: Text('Changer mon mot de passe'),
+              ),
+              PopupMenuItem<_ActionCompte>(
+                value: _ActionCompte.deconnexion,
+                child: Text('Se déconnecter'),
+              ),
+            ],
           ),
         ],
       ),
@@ -184,15 +220,25 @@ class _CarteDossier extends StatelessWidget {
             const SizedBox(height: Espace.lg),
 
             FilledButton(
-              onPressed: () => context.push(Routes.wizard),
+              // Un dossier déposé s'ouvre en lecture : on ne met pas un
+              // candidat en situation de modifier sans l'avoir voulu.
+              onPressed: () =>
+                  context.push(depose ? Routes.resume : Routes.wizard),
               child: Text(
                 depose
-                    ? 'Ouvrir mon dossier'
+                    ? 'Consulter mon dossier'
                     : completes == 0
                     ? 'Commencer ma demande'
                     : 'Reprendre ma demande',
               ),
             ),
+            if (depose) ...<Widget>[
+              const SizedBox(height: Espace.xs),
+              OutlinedButton(
+                onPressed: () => context.push(Routes.wizard),
+                child: const Text('Modifier mon dossier'),
+              ),
+            ],
           ],
         ),
       ),
@@ -265,3 +311,5 @@ class _CarteEtape extends StatelessWidget {
     );
   }
 }
+
+enum _ActionCompte { motDePasse, deconnexion }

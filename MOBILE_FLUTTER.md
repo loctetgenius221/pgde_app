@@ -23,6 +23,8 @@ Le backend est une application **100 % web, rendue en Blade, authentifiée par s
 
 Les sections **§6 (bloqueurs)** et **§7 (contrat d'API)** sont celles à transmettre à l'équipe backend.
 
+Écrans particuliers, traités à part car leur logique n'est pas évidente à la lecture du code : la **photo de profil** (§4.6), l'écran **« Mon CV »** et son bouton *Modifier* (§4.7), le **changement de mot de passe** (§3.6) et la **réinitialisation** (§3.7).
+
 ---
 
 ## 1. Architecture et environnement
@@ -136,9 +138,9 @@ Structure réelle (attention : elle **diverge de la migration**, voir §6.1) :
 | `specialite` | varchar(255) | 2 (1ʳᵉ formation) |
 | `etablissementdiplome` | longtext | 2 (1ʳᵉ formation) |
 | **`autresdiplomes`** | **varchar(255)** ⛔ | 2 — JSON de **toutes** les formations |
-| `diplome_file` | text | 2 — JSON `["uploads/diplome/…", …]` |
-| `cv_file` | text | 2 — JSON `["uploads/cv/…", …]` |
-| `photo_profil` | varchar(255) | 2 — chemin simple |
+| `diplome_file` | text | **2** — JSON `["uploads/diplome/…", …]` (un champ par bloc formation) |
+| `cv_file` | text | **4** ⚠️ — JSON `["uploads/cv/…", …]` (pas à l'étape 2) |
+| `photo_profil` | varchar(255) | **1** ⚠️ — chemin simple, dès la 1ʳᵉ étape (§4.6) |
 | `experiences` | longtext | 3 — JSON de toutes les expériences |
 | `posteoccupe` | longtext | 3 — dérivé : poste de la 1ʳᵉ expérience |
 | `employeur` | longtext | 3 — dérivé : employeur de la 1ʳᵉ expérience |
@@ -256,13 +258,80 @@ public function hasVerifiedEmail() {
 
 `hasVerifiedEmail()` renvoie donc **toujours `false`**. Le middleware `enabled` (`CheckAccountEnabled`) utilise `!$user->enabled`, qui fonctionne. L'API doit s'appuyer sur **`(bool) $user->enabled`**, pas sur `hasVerifiedEmail()`.
 
+### 3.6 Changement de mot de passe (utilisateur connecté)
+
+Le backend expose **deux implémentations concurrentes** du même besoin. Il faut savoir laquelle est la référence.
+
+| # | Route | Contrôleur | Nom de route | Redirection après succès |
+| :-- | :--- | :--- | :--- | :--- |
+| 1 | `GET /change-password` | `PasswordController::edit` | `password.edit` | *(affiche le formulaire)* |
+| 2 | `POST /change-password` | `PasswordController::update` | `password.update` ⚠️ | `route('password.edit')` |
+| 3 | `POST /auth/change-password` | `AuthController::changePassword` | `change.password` | `route('userdata.summary', $userdata->id)` |
+
+> **C'est la n°3 qui est réellement utilisée** : `change-password.blade.php` poste vers `route('change.password')`. La n°2 est du code mort — mais son **nom de route casse la réinitialisation de mot de passe** (voir §3.7, bloqueur **B9**).
+
+**Contrat identique pour les deux** (`PasswordController::update` et `AuthController::changePassword`) :
+
+```php
+'current_password' => 'required|string',
+'new_password'     => 'required|string|min:8|confirmed',
+```
+
+Champs à envoyer — **noms exacts** :
+
+| Champ | Obligatoire | Règle |
+| :--- | :--- | :--- |
+| `current_password` | oui | doit correspondre au mot de passe actuel |
+| `new_password` | oui | min. 8 caractères |
+| `new_password_confirmation` | oui | imposé par la règle `confirmed` sur `new_password` |
+
+Erreur en cas de mauvais mot de passe actuel — clé `current_password`, message serveur déjà en français :
+
+```json
+{ "message": "…", "errors": { "current_password": ["Le mot de passe actuel est incorrect."] } }
+```
+
+Trois points à connaître côté mobile :
+
+1. **⚠️ Les comptes legacy Symfony ne peuvent pas changer leur mot de passe.** `changePassword()` n'utilise que `Hash::check($current, $user->password)`. Un compte dont `salt` est non-null (jamais reconnecté depuis la migration) verra **toujours** « Le mot de passe actuel est incorrect. » ⇒ **l'endpoint API doit réutiliser la double vérification bcrypt / Symfony3 du login** (§3.3), exactement comme `AuthController::login`.
+
+2. **Aucune invalidation de session ni de token.** Le mot de passe est réécrit, rien d'autre. Pour l'API, décider : révoquer les **autres** tokens Sanctum (`$user->tokens()->where('id','!=',$current)->delete()`) et conserver celui de l'appareil courant. C'est le comportement attendu par les utilisateurs et ça limite le risque en cas de compte compromis.
+
+3. **Aucune contrainte de robustesse** au-delà de `min:8` : pas de vérification de complexité, pas de refus des mots de passe compromis. Si le mobile veut un indicateur de robustesse, c'est une décision purement côté app (ou faire ajouter `Password::defaults()` côté serveur).
+
+> Bug secondaire : si l'utilisateur n'a pas encore de dossier, `AuthController::changePassword` redirige vers `route('userdata.summary', 'default')` ⇒ `/userdata/summary/default` ⇒ `findOrFail` échoue ⇒ **404**. Sans conséquence pour le mobile (qui ne suit pas les redirections), mais à corriger.
+
+### 3.7 Mot de passe oublié — réinitialisation
+
+Parcours web actuel, en trois temps :
+
+| Étape | Route | Détail |
+| :--- | :--- | :--- |
+| 1. Demande du lien | `POST /forgot-password` (`password.email`) | `email` : `required`\|`email`\|`exists:utilisateur,email` → `Password::sendResetLink()` |
+| 2. Ouverture du lien | `GET /reset-password/{token}` (`password.reset`) | affiche le formulaire |
+| 3. Nouveau mot de passe | `POST /reset-password` (`password.update`) | `token`, `email`, `password`, `password_confirmation` (`min:8`\|`confirmed`) |
+
+Paramètres du broker (`config/auth.php`) : **expiration 15 minutes**, **throttle 60 secondes** entre deux demandes. Deux brokers existent (`users` et `utilisateur`), tous deux adossés au provider `users` → strictement équivalents.
+
+> ⛔ **Bloqueur B9 — la réinitialisation est cassée aujourd'hui.** Le nom `password.update` est déclaré **deux fois** dans [routes/web.php](routes/web.php) : d'abord sur `POST /reset-password` (groupe `guest`), puis sur `POST /change-password` (groupe `auth`). Le second écrase le premier dans le registre des noms. Or `reset-password.blade.php` (ligne 23) utilise `action="{{ route('password.update') }}"` ⇒ le formulaire poste vers **`/change-password`**, route protégée par `auth` ⇒ l'invité est redirigé vers `/login` et **le mot de passe n'est jamais réinitialisé**. À corriger avant d'exposer ce parcours au mobile.
+
+Il existe par ailleurs une variante « chatbot » plus adaptée au mobile, qui exige **email + `numberid`** (CNI/passeport) avant d'envoyer le lien — mais elle est inatteignable (bloqueur **B1**) :
+
+```php
+// app/Http/Controllers/Api/ResetPasswordController.php  →  POST /api/chatbot/reset-password
+'email'    => 'required|email',
+'numberid' => 'required'
+```
+
+**Recommandation mobile** : reprendre cette logique à deux facteurs (email **+** `numberid`) et remplacer le lien web par un **code OTP à 6 chiffres**, comme pour la vérification d'email (§3.4). Un lien signé de réinitialisation est difficile à réintégrer proprement dans une app.
+
 ---
 
 ## 4. Le formulaire de demande — contrat de données exact
 
 Source d'autorité : `UserdataController::store()` et `::update()`. Le wizard web comporte 4 étapes ; l'app doit les reprendre pour permettre l'édition ultérieure champ par champ.
 
-### Étape 1 — Identité & résidence
+### 4.1 Étape 1 — Identité, résidence **et photo de profil**
 
 | Champ | Règle `store()` | Règle `update()` | Valeurs |
 | :--- | :--- | :--- | :--- |
@@ -289,7 +358,7 @@ Source d'autorité : `UserdataController::store()` et `::update()`. Le wizard we
 >
 > Logique `handicap` : radio « Avez-vous un handicap ? ». Si non → envoyer `handicap: "0"`. Si oui → envoyer `handicap_id`.
 
-### Étape 2 — Formations (liste dynamique) + fichiers
+### 4.2 Étape 2 — Formations (liste dynamique) + diplômes
 
 Tableau `formations[]`, indexé :
 
@@ -308,23 +377,29 @@ Traitement serveur :
 - la **1ʳᵉ** formation est recopiée dans les colonnes plates (`academic_id`, `diplome`, `anneediplome`, `specialite`, `etablissementdiplome`) ;
 - l'ensemble est sérialisé en JSON dans `autresdiplomes`.
 
-Fichiers :
+**Les trois champs de fichiers sont validés ensemble dans `store()`/`update()`, mais ils sont saisis à des étapes différentes du wizard.** Emplacement réel dans les vues Blade :
 
-| Champ | Règle | Destination |
-| :--- | :--- | :--- |
-| `diplome_file` | nullable\|array | |
-| `diplome_file.*` | file\|mimes:**pdf,doc,docx,rtf,txt**\|**max:2048** (2 Mo) | `public/uploads/diplome/` |
-| `cv_file` | nullable\|array | |
-| `cv_file.*` | file\|mimes:pdf,doc,docx,rtf,txt\|max:2048 | `public/uploads/cv/` |
-| `photo_profil` | nullable\|image\|mimes:jpeg,png,jpg,gif\|max:2048 | `public/uploads/photos/` |
+| Champ | Étape réelle | Règle | Destination disque |
+| :--- | :--- | :--- | :--- |
+| `photo_profil` | **1** | nullable\|image\|mimes:jpeg,png,jpg,gif\|max:2048 | `public/uploads/photos/` |
+| `diplome_file[]` | **2** (un champ `multiple` par bloc formation) | nullable\|array + `.*` file\|mimes:**pdf,doc,docx,rtf,txt**\|**max:2048** (2 Mo) | `public/uploads/diplome/` |
+| `cv_file[]` | **4** (à côté des vœux et de `cv_summary`) | nullable\|array + `.*` file\|mimes:pdf,doc,docx,rtf,txt\|max:2048 | `public/uploads/cv/` |
 
+Preuves : `photo_profil` est à la ligne 133 de [create.blade.php](resources/views/userdata/create.blade.php), dans `<div id="step-1">` (113→414) ; `diplome_file[]` aux lignes 477 et 560, dans `step-2` ; `cv_file[]` à la ligne 790, dans `step-4` (774→956). Même découpage dans [edit.blade.php](resources/views/userdata/edit.blade.php) (`photo_profil` l. 339 / step-1, `diplome_file[]` l. 736 / step-2, `cv_file[]` l. 1101 / step-4).
+
+> ⚠️ Ne pas placer l'upload du CV à l'étape 2 dans l'app : côté web c'est **l'étape 4**. Le regrouper ailleurs romprait la correspondance avec le parcours web et l'écran d'édition.
+>
+> Les diplômes sont attachés **par bloc de formation** côté UI, mais le serveur les **aplatit en une seule liste** : `foreach ($request->file('diplome_file') as $file)` → un unique tableau JSON dans `diplome_file`. **Le lien entre un diplôme et la formation correspondante est perdu.** Ne pas promettre cette association dans l'app.
+>
 > Pas de PNG/JPG accepté pour un diplôme : **une photo de diplôme prise au téléphone sera refusée.** L'app doit soit convertir en PDF, soit demander l'ajout de `jpg,png` à la whitelist (§6.2).
 >
 > Nommage serveur : `time() . '_' . nom_original`. Non assaini, collisions possibles. L'URL de retour doit être encodée.
+>
+> Côté web, l'input `cv_file` n'a **pas** l'attribut `multiple` (un seul CV), alors que la validation accepte un tableau. Le backend gère donc plusieurs CV : l'app peut en proposer plusieurs sans changement serveur.
 
 Suppression de fichiers en édition : champs texte `deleted_files` et `deleted_cv_files`, **chemins séparés par `;`**.
 
-### Étape 3 — Expériences professionnelles
+### 4.3 Étape 3 — Expériences professionnelles
 
 | Champ | Règle | Notes |
 | :--- | :--- | :--- |
@@ -339,7 +414,7 @@ Traitement : une expérience est conservée si **au moins un** de `description`,
 
 > ⚠️ **Conséquence destructive** : un `PUT` partiel sans `hasExperience=oui` **efface les expériences déjà enregistrées**. Idem pour `autresdiplomes` si `formations` est absent. **L'app doit toujours renvoyer la totalité du dossier** (formations + expériences + `hasExperience`) à chaque mise à jour, ou faire corriger le backend (§6.2).
 
-### Étape 4 — Vœux d'emploi
+### 4.4 Étape 4 — Vœux d'emploi **et CV**
 
 | Champ | Règle `store()` | Règle `update()` |
 | :--- | :--- | :--- |
@@ -348,18 +423,223 @@ Traitement : une expérience est conservée si **au moins un** de `description`,
 | `anneeexperience1` | nullable\|integer | idem |
 | `anneeexperience2` | nullable\|integer | idem |
 | `cv_summary` | nullable\|string\|**max:1000** | idem |
+| `cv_file[]` | nullable\|array — **le CV se dépose ici**, pas à l'étape 2 (§4.2) | idem |
 
 > Les deux vœux sont **obligatoires** à la création. Rien n'empêche `emploi1_id == emploi2_id` : à contrôler côté app (UX) et idéalement côté serveur (`different:emploi1_id`).
 >
 > Le choix se fait en cascade : **secteur → emploi**. `secteur_id` n'est pas stocké dans `userdata`, il ne sert qu'au filtrage de la liste. L'app doit donc, pour réafficher un vœu existant, remonter `emploi.secteur_id` pour présélectionner le secteur.
 
-### Récapitulatif des champs obligatoires à la création
+### 4.5 Récapitulatif des champs obligatoires à la création
 
 ```
 datenaiss, lieunaiss, lieuresidence, genre, telephone1, emploi1_id, emploi2_id
 ```
 
 Tout le reste est optionnel côté serveur — même si le formulaire web marque davantage de champs `required` en HTML. L'app peut donc enregistrer un brouillon serveur dès l'étape 4 franchie.
+
+### 4.6 La photo de profil — cycle de vie complet
+
+**Réponse directe à la question : la photo appartient à la demande, pas au compte.** Elle est stockée dans `userdata.photo_profil`, pas dans `utilisateur`. Il n'existe **aucun écran « profil »** séparé dans ce backend : le « profil » du candidat *est* son dossier de demande. Conséquence pour Flutter : tant qu'un candidat n'a pas créé sa demande, il **ne peut pas avoir de photo**.
+
+Elle est donc à la fois un champ du formulaire (étape 1) **et** une ressource modifiable isolément depuis l'écran résumé. Trois points d'entrée coexistent :
+
+| | Contexte | Endpoint | Transport | Remarques |
+| :-- | :--- | :--- | :--- | :--- |
+| **A** | Wizard de création, **étape 1** | `POST /userdata` (`userdata.store`) | multipart, **avec tout le formulaire** | champ `photo_profil`, optionnel |
+| **B** | Formulaire d'édition, **étape 1** | `PUT /userdata/{id}` (`userdata.update`) | multipart, avec tout le formulaire | aperçu local via `previewImage(event)` |
+| **C** | **Écran résumé**, bouton autonome | `updatePhotoProfil` | multipart **AJAX, photo seule** | ⛔ route cassée, voir plus bas |
+
+**Comportement serveur en édition (B)** — correctif BUG-05, important à ne pas casser :
+
+```php
+if ($request->hasFile('photo_profil')) {
+    // supprime l'ancien fichier du disque, puis enregistre le nouveau
+    @unlink(public_path($userdata->photo_profil));
+    $validated['photo_profil'] = 'uploads/photos/' . $filename;
+} else {
+    unset($validated['photo_profil']);   // ⇒ l'ancienne photo est CONSERVÉE
+}
+```
+
+⇒ Ne **jamais** envoyer `photo_profil` vide ou `null` lors d'une mise à jour : l'omettre suffit à la conserver. (C'est la seule exception à la règle « toujours renvoyer tout le dossier » du §4.3.)
+
+#### Le flux C en détail — c'est celui que Flutter doit reproduire
+
+Extrait de [summary.blade.php](resources/views/userdata/summary.blade.php) (l. 332-400) :
+
+1. Affichage : `<img id="user-photo" src="{{ asset($userdata->photo_profil ?: 'images/images.png') }}">`
+   → placeholder par défaut **`public/images/images.png`** (présent, 2 Ko).
+2. Clic sur « **Modifier la photo** » → déclenche l'input file caché.
+3. `change` sur l'input → **soumission automatique** (pas de second clic de confirmation).
+4. `POST` AJAX multipart vers `route('updatePhotoProfil', ['id' => $userdata->id])`, bouton passé en « Chargement… » et désactivé.
+5. Succès → `img.src = response.photo_profil + '?t=' + Date.now()` (**cache-buster obligatoire**, l'URL peut être identique) + SweetAlert de confirmation.
+6. Erreur → SweetAlert avec `xhr.responseJSON.message`.
+
+**Contrat de l'endpoint dédié** (`UserdataController::updatePhotoProfil`) :
+
+```php
+'photo_profil' => 'required|image|max:2048',   // ⚠️ required, et AUCUNE liste mimes
+```
+
+| Cas | Réponse |
+| :--- | :--- |
+| Succès | `200` `{"success": true, "photo_profil": "http://…/uploads/photos/1775151117_x.jpeg"}` — **URL absolue** via `asset()` |
+| Pas propriétaire (ni admin) | `403` `{"success": false, "message": "Non autorisé."}` |
+| Aucun fichier reçu | `400` `{"success": false}` |
+| Validation | `422` standard Laravel |
+
+> Noter la divergence de validation : l'endpoint dédié accepte **toute image** (`image` seul), alors que le formulaire complet restreint à `jpeg,png,jpg,gif`. Un WebP passera par le flux C mais sera refusé par le flux A/B. À harmoniser côté API.
+
+#### ⛔ Ce flux est cassé aujourd'hui (bloqueur B5, mécanisme précis)
+
+Les deux routes déclarées n'ont **pas** de paramètre `{id}` :
+
+```php
+Route::post('/update-photo',        [UserdataController::class, 'updatePhotoProfil'])->name('updatePhotoProfil');
+Route::post('/updatephoto-profil', [UserdataController::class, 'updatePhotoProfil'])->name('update.photo');
+```
+
+alors que la signature est `updatePhotoProfil(Request $request, $id)`. Donc :
+
+- `route('updatePhotoProfil', ['id' => 1369020])` génère **`/update-photo?id=1369020`** — l'`id` part en **query string**, pas en paramètre de route ;
+- à l'appel, Laravel n'a aucun paramètre de route à injecter dans `$id` ⇒ **`ArgumentCountError: Too few arguments`** ⇒ **500**.
+
+Le bouton « Modifier la photo » de l'écran résumé est donc **non fonctionnel en l'état**, sur le web comme pour toute app qui appellerait cette URL. Correctif : `Route::post('/update-photo/{id}', …)`, ou — préférable pour l'API — déduire le dossier de l'utilisateur authentifié et supprimer le paramètre (§7.5).
+
+#### Ce que Flutter doit gérer
+
+| Sujet | Règle |
+| :--- | :--- |
+| Source | `photo_profil` du dossier ; si `null` → **avatar local** (initiales ou asset embarqué), ne pas dépendre de `images/images.png` côté serveur |
+| Deux préfixes historiques | `uploads/photos/…` **et** `storage/uploads/…` (une ligne legacy en base). Si l'API ne renvoie pas d'URL absolue, préfixer en tenant compte des deux |
+| Encodage | `Uri.encodeFull()` — les noms contiennent espaces et accents (`1775151117_WhatsApp Image 2026-03-10 at 07.54.53.jpeg`) |
+| Cache | `CachedNetworkImage` + **invalider le cache après upload** (`evict()` ou suffixe `?t=timestamp`), sinon l'ancienne photo reste affichée |
+| Capture | `image_picker` : appareil photo **et** galerie. Le web utilise `capture="environment"` (caméra arrière) — pour un portrait, préférer la caméra **avant** par défaut |
+| Poids | **2 Mo max.** Une photo de smartphone fait 3-8 Mo ⇒ compression **obligatoire** avec `flutter_image_compress` avant l'envoi, sinon `422` systématique |
+| Recadrage | Le backend ne recadre ni redimensionne rien. Prévoir un recadrage carré côté app (`image_cropper`) : l'affichage web est en `object-fit: cover` 150-200 px |
+| Formats | Se limiter à **jpg / png** : c'est l'intersection des deux validations serveur |
+| UX | Reproduire l'upload immédiat à la sélection (pas de bouton « valider »), avec indicateur de progression `onSendProgress` de Dio |
+| Ordre des opérations | Tant que la demande n'existe pas, il n'y a pas d'`id` de dossier : **la photo doit partir avec le `POST /demande` initial** (flux A), pas avant |
+
+### 4.7 L'écran « Mon CV » — le résumé du dossier
+
+C'est l'écran d'atterrissage après connexion et après chaque enregistrement. Source : `UserdataController::summary()` + [summary.blade.php](resources/views/userdata/summary.blade.php).
+
+```php
+GET /userdata/summary/{id}        → name: userdata.summary   (middleware: auth)
+```
+
+Trois comportements du contrôleur à retenir :
+
+1. **Contrôle d'accès** : propriétaire **ou** admin, sinon `abort(403)` (correctif SEC-02).
+2. **La date est reformatée côté serveur** : `$userdata->datenaiss = Carbon::parse(...)->format('d/m/Y')`. L'affichage est donc déjà en **`jj/mm/aaaa`** — l'API devra, elle, renvoyer de l'ISO (`YYYY-MM-DD`) et laisser le formatage à l'app.
+3. `{id}` est l'**id du dossier** (`userdata.id`), pas celui de l'utilisateur.
+
+#### Structure exacte à reproduire
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ EN-TÊTE INSTITUTIONNEL                                   │
+│  drapeau + « République du Sénégal »                     │
+│             « Un Peuple - Un But - Une Foi »             │
+│  « PLATEFORME DE GESTION DES DEMANDES D'EMPLOI »         │
+├──────────────────────────────────────────────────────────┤
+│ [ N° INSCRIPTION : 332099 ]      [ Bonjour Prénom Nom ▾ ]│
+│                                    ├ Modifier le mot…    │
+│                                    └ Déconnexion         │
+├──────────────────────────────────────────────────────────┤
+│   ╭────────╮                                             │
+│   │ PHOTO  │   « Modifier la photo »   (§4.6)            │
+│   ╰────────╯                                             │
+│                                                          │
+│   [ 👤 Mettre à jour mes infos ]  ← LE BOUTON MODIFIER   │
+├──────────────────────────────────────────────────────────┤
+│ Informations personnelles      (4 lignes seulement)      │
+│   Date de naissance : …                                  │
+│   Email : …                                              │
+│   Téléphone : …                                          │
+│   Lieu de résidence : …                                  │
+├──────────────────────────────────────────────────────────┤
+│ Formation                      (1 carte par formation)   │
+├──────────────────────────────────────────────────────────┤
+│ Expérience professionnelle     (1 carte par expérience)  │
+├──────────────────────────────────────────────────────────┤
+│ Emploi                         (résumé CV + 2 vœux)      │
+└──────────────────────────────────────────────────────────┘
+```
+
+**En-tête** — `N° INSCRIPTION` = `$userdata->utilisateur->id`, soit l'**id du compte utilisateur**, pas celui du dossier. C'est le numéro que le candidat communique à l'administration : à afficher en évidence dans l'app, et à rendre copiable.
+
+**Section « Informations personnelles »** — quatre lignes, et c'est tout :
+
+| Libellé | Donnée |
+| :--- | :--- |
+| Date de naissance : | `datenaiss` (déjà en `jj/mm/aaaa`) |
+| Email: | `utilisateur.email` ← vient du **compte**, pas du dossier |
+| Téléphone: | `telephone1` |
+| Lieu de résidence : | `lieuresidence` |
+
+**Section « Formation »** — une carte par entrée de `autresdiplomes` (décodé dans la vue) :
+
+- **titre** = libellé du niveau, résolu via `Academic::pluck('libelle','id')`. Si `academic_id` vaut `'sansdiplome'` **ou** `'20'` → affiche littéralement « **Sans diplôme** » *(la vue gère donc la valeur 20 fautive du bloqueur B4 — l'app ne doit pas reproduire ce contournement, elle doit envoyer 14)* ;
+- + `« à {etablissementdiplome} »` en plus petit, si présent ;
+- ligne grise : `anneediplome` ;
+- ligne : `Intitulé du diplôme : {diplome}` ;
+- ligne : `Spécialité : {specialite}` ;
+- **repli** si `autresdiplomes` est vide mais `academic_id`/`diplome` présents → une carte construite depuis les colonnes plates ;
+- **état vide** : « Aucune formation renseignée ».
+
+**Section « Expérience professionnelle »** — une carte par entrée de `experiences` :
+
+- **titre** = `poste` (repli `posteoccupe`, puis « Poste non renseigné ») + `« à {employeur} »` ;
+- `{years} année` / `{years} années` **d'expérience** (pluriel si `> 1`) ;
+- `description` en texte courant ;
+- **repli** sur `posteoccupe`/`employeur`/`nombreanneeexpe` ;
+- **état vide** : « Pas d'expérience ».
+
+**Section « Emploi »** — une seule carte :
+
+- `Résumé du CV :` → `cv_summary` ;
+- `Premier secteur choisi:` → `emploi1.secteur.libelle` · `Emploi concerné:` → `emploi1.libelle` ;
+- `Deuxième secteur choisi:` → `emploi2.secteur.libelle` · `Emploi concerné:` → `emploi2.libelle`.
+
+> ⛔ **Bloqueur B10** : ces quatre accès sont écrits **sans protection null** (`{{ $userdata->emploi1->secteur->libelle }}`). Comme `update()` déclare `emploi1_id`/`emploi2_id` en `nullable`, un dossier sans vœu rend l'écran résumé **définitivement inaccessible** (`Attempt to read property "secteur" on null` ⇒ **500**), y compris pour son propriétaire. L'API doit renvoyer `null` proprement et l'app afficher « Non renseigné ».
+
+#### ⚠️ Ce que le résumé n'affiche PAS
+
+Bien que présents en base, ces champs sont **absents** de l'écran : `genre`, `situationmatrimoniale`, `nombreenfant`, `lieunaiss`, `addresse`, `country_id`, les quatre couples région/département, `handicap_id`, `anneeexperience1`, `anneeexperience2`, et — surtout — **les fichiers CV et diplômes** (ils ne sont visibles et gérables que dans le formulaire d'édition).
+
+**Décision de conception pour l'app** : le résumé web est volontairement minimal, mais sur mobile c'est le seul écran de consultation. **Recommandation : l'enrichir** — ajouter un bloc « État civil » (genre, situation, enfants, lieu de naissance, résidence complète, handicap) et un bloc « Mes documents » listant CV, diplômes et photo avec téléchargement. `GET /demande` (§7.6) renvoie déjà tout le nécessaire.
+
+#### Le bouton « Modifier »
+
+```html
+<a href="{{ route('userdata.edit', ['id' => $userdata->id]) }}" class="btn btn-success">
+  <i class="fas fa-user-edit"></i> Mettre à jour mes infos
+</a>
+```
+
+Un **unique** bouton, qui ouvre le wizard d'édition complet (4 étapes, `edit.blade.php`, 2289 lignes) à l'étape 1. Il n'y a **aucune édition par section**.
+
+Pour l'app, c'est le point où il faut faire mieux que le web : mettre un bouton **« Modifier » sur chaque section**, qui ouvre le wizard **directement à l'étape correspondante** (§8.7 donne le mapping champ → étape). Le formulaire est long ; faire retraverser les quatre étapes pour corriger un numéro de téléphone est le principal point de friction du parcours actuel.
+
+Trois précautions :
+
+- l'édition doit **repartir du dossier serveur** (`GET /demande`), pas d'un cache d'affichage ;
+- à la sauvegarde, **renvoyer la totalité** formations + expériences + `hasExperience` (§4.3), sinon des données sont effacées ;
+- **omettre** `photo_profil` s'il n'y a pas de nouvelle photo (§4.6).
+
+#### La variante imprimable : `resume.blade.php`
+
+```php
+GET /userdata/{id}/resume        → name: resume   (middleware: auth)
+```
+
+Même mise en page (mêmes quatre sections), mais en version **CV imprimable** : en-tête et pied de page marqués `d-print-none`, ni bouton d'édition ni photo modifiable.
+
+> ⚠️ Piège : ici `{id}` est l'**id de l'utilisateur**, pas celui du dossier — `Utilisateur::with('userdata')->findOrFail($id)`. Les deux routes `userdata.summary` et `resume` attendent donc **deux identifiants différents** malgré des URLs voisines.
+
+Si l'app doit proposer un export PDF, deux options : générer le PDF côté Flutter (paquet `pdf`, maîtrise totale de la mise en page) ou faire produire un `GET /demande/cv.pdf` côté serveur depuis cette vue. La seconde garantit que le CV mobile est **identique** au document que voit l'administration — c'est l'option recommandée.
 
 ---
 
@@ -453,10 +733,13 @@ GET /check-email?email=...                 → ⛔ CASSÉ, interroge la table `u
 | **B2** | Aucun système de token | Sanctum absent de `vendor/laravel/` | `composer require laravel/sanctum` + `HasApiTokens` sur `Utilisateur` |
 | **B3** | **`autresdiplomes` est `varchar(255)`** alors que la migration déclare `json` | En base : `varchar(255)`. Une **seule** formation occupe déjà **183 caractères**. `sql_mode` inclut `STRICT_TRANS_TABLES` ⇒ **erreur SQL 1406 « Data too long »** dès la 2ᵈᵉ formation | `ALTER TABLE userdata MODIFY autresdiplomes JSON NULL;` (ou `LONGTEXT`) — **sinon les formations multiples sont impossibles**, sur mobile comme sur le web |
 | **B4** | `academic_id = 20` pour « sans diplôme » | `SELECT * FROM academic WHERE id IN (19,20)` ⇒ **0 ligne**. Le vrai id est **14** | Remplacer `20` par `14` dans `UserdataController::store()` et `::update()` (3 occurrences), et corriger les données existantes |
-| **B5** | Routes de photo de profil sans paramètre | `Route::post('/update-photo', …)` et `/updatephoto-profil` vs `updatePhotoProfil(Request $request, $id)` ⇒ **`ArgumentCountError`** | `Route::post('/update-photo/{id}', …)` ou déduire l'id du user connecté |
+| **B5** | **Le bouton « Modifier la photo » du résumé est cassé** | Les routes `/update-photo` et `/updatephoto-profil` n'ont pas de `{id}`, mais `updatePhotoProfil(Request $request, $id)` l'exige. `route('updatePhotoProfil', ['id'=>…])` produit `/update-photo?id=…` (query string) ⇒ **`ArgumentCountError`** ⇒ 500. Détail : §4.6 | `Route::post('/update-photo/{id}', …)`, ou déduire le dossier de l'utilisateur authentifié et retirer le paramètre |
 | **B6** | `/check-email` interroge la mauvaise table | `User::where('email', …)` → table `users`, alors que les candidats sont dans `utilisateur` | Utiliser `Utilisateur::where('email_canonical', strtolower(trim($email)))` |
 | **B7** | `POST /api/chatbot/reset-password` inatteignable | conséquence de B1 | résolu par B1 |
 | **B8** | `APP_URL=localhost` | `.env` | URL absolue avec schéma — sinon liens signés et `asset()` cassés |
+| **B9** | **La réinitialisation de mot de passe est cassée** | Le nom `password.update` est déclaré 2× : `POST /reset-password` (groupe `guest`) puis `POST /change-password` (groupe `auth`). Le second gagne ⇒ `reset-password.blade.php` l. 23 poste vers `/change-password`, protégée par `auth` ⇒ redirection vers `/login`, mot de passe jamais réinitialisé. Détail : §3.7 | Renommer la route de changement en `password.change` (ou supprimer `PasswordController::update`, code mort — la vue utilise `change.password`) |
+| **B10** | **L'écran résumé plante si un vœu est vide** | `{{ $userdata->emploi1->secteur->libelle }}` sans protection null, alors que `update()` déclare `emploi1_id`/`emploi2_id` en `nullable` ⇒ `Attempt to read property on null` ⇒ **500**, dossier inaccessible à son propriétaire. Détail : §4.7 | Opérateur `?->` + valeur de repli dans la vue ; côté API, renvoyer `null` et laisser l'app afficher « Non renseigné » |
+| **B11** | Changement de mot de passe impossible pour les comptes legacy | `AuthController::changePassword` n'utilise que `Hash::check()` ; un compte avec `salt` non-null échouera toujours sur `current_password`. Détail : §3.6 | Réutiliser la double vérification bcrypt / Symfony3 du login |
 
 ### 6.2 Bloqueurs de conception (à arbitrer avec le backend)
 
@@ -473,6 +756,12 @@ GET /check-email?email=...                 → ⛔ CASSÉ, interroge la table `u
 | **D9** | `emploi1_id` peut égaler `emploi2_id` | Vœu en doublon | `different:emploi1_id` |
 | **D10** | Login possible avec `enabled = 0` (BUG-02) | Un utilisateur non vérifié atteindrait le wizard | Décider : token + flag, ou `403` (§3.3) |
 | **D11** | `roles` en `serialize()` (SEC-05, non corrigé) | Ne jamais exposer brut | L'API renvoie `is_admin: bool` |
+| **D12** | Le résumé n'affiche que 4 champs personnels et **aucun fichier** (§4.7) | Sur mobile c'est le seul écran de consultation | Enrichir : bloc « État civil » + bloc « Mes documents » (CV, diplômes, photo) avec téléchargement |
+| **D13** | Édition uniquement globale (un seul bouton « Mettre à jour mes infos ») | Retraverser 4 étapes pour corriger un téléphone = principal point de friction | Exposer `PATCH /demande/step/{1..4}` et ouvrir le wizard à l'étape voulue |
+| **D14** | Validation photo divergente : `image` seul sur l'endpoint dédié, `mimes:jpeg,png,jpg,gif` dans le formulaire | Un WebP passe par un chemin et échoue sur l'autre | Harmoniser sur une seule liste de mimes |
+| **D15** | Pas de révocation de token au changement de mot de passe | Un appareil volé reste connecté après le changement | Révoquer les autres tokens Sanctum, conserver celui de l'appareil courant (§3.6) |
+| **D16** | Deux routes attendent des ids différents : `userdata.summary` ← id du **dossier**, `resume` ← id de l'**utilisateur** | Source de bugs d'intégration | Sur l'API, aucun id dans l'URL (§7.5) |
+| **D17** | Déconnexion web non fonctionnelle : le `<form id="logout-form">` du résumé poste vers `route('login')` au lieu de `route('logout')` | Sans effet pour le mobile (logout local + `POST /auth/logout`), mais à signaler | Corriger l'action du formulaire |
 
 ---
 
@@ -536,6 +825,17 @@ Autres codes : `401` token absent/invalide · `403` compte non activé ou accès
 >
 > **Exigence non négociable** : cet endpoint doit réutiliser la double vérification bcrypt / Symfony3 de `AuthController::login` (§3.3), y compris la réécriture en bcrypt et la remise à `null` de `salt`.
 
+**`POST /auth/password/change`** — conserver **exactement** les noms de champs du web, pour que les messages d'erreur serveur restent réutilisables et que la logique soit partagée avec `AuthController::changePassword` :
+
+```json
+{ "current_password": "…", "new_password": "…", "new_password_confirmation": "…" }
+```
+
+Réponse `200` : `{"message": "Votre mot de passe a été mis à jour avec succès."}`, et — si **D15** est retenu — `{"token": "<nouveau token>"}` après révocation des autres tokens, que l'app doit alors substituer dans le stockage sécurisé.
+Réponse `422` : erreur sous la clé `current_password` (« Le mot de passe actuel est incorrect. ») ou `new_password`.
+
+> Cet endpoint doit lui aussi appliquer la double vérification bcrypt / Symfony3 sur `current_password`, sinon les comptes legacy ne pourront jamais changer de mot de passe (bloqueur **B11**, §3.6).
+
 ### 7.3 Données de référence
 
 | Méthode | Endpoint | Réponse |
@@ -584,11 +884,25 @@ Interroger la table **`utilisateur`** sur les colonnes canoniques. Permet une va
 | PUT | `/demande` | Mettre à jour |
 | PATCH | `/demande/step/{1..4}` | *(optionnel)* sauvegarde par étape |
 | POST | `/demande/submit` | *(si D3 retenu)* passer de brouillon à soumise |
-| POST | `/demande/photo` | `multipart` — champ `photo_profil` |
+| POST | `/demande/photo` | `multipart` — champ `photo_profil` (remplace §4.6 **C**, cassé) |
+| DELETE | `/demande/photo` | Retirer la photo — *à créer, aucun équivalent web* |
 | POST | `/demande/files` | `multipart` — `diplome_file[]` et/ou `cv_file[]` |
 | DELETE | `/demande/files` | `{"type":"cv"\|"diplome","path":"uploads/cv/…"}` |
+| GET | `/demande/cv.pdf` | *(recommandé)* CV imprimable, rendu depuis `resume.blade.php` (§4.7) |
 
-> Aucun `{id}` dans l'URL : le dossier est déduit de l'utilisateur authentifié. Cela **supprime par construction la classe de failles IDOR** corrigée manuellement dans le contrôleur web (SEC-02).
+> Aucun `{id}` dans l'URL : le dossier est déduit de l'utilisateur authentifié. Cela **supprime par construction la classe de failles IDOR** corrigée manuellement dans le contrôleur web (SEC-02), et évite la confusion entre id de dossier et id d'utilisateur (**D16**).
+
+**`POST /demande/photo`** — conserver la forme de réponse déjà consommée par le web, en y ajoutant le chemin relatif :
+
+```json
+{
+  "success": true,
+  "photo_profil": "http://…/uploads/photos/1775151117_x.jpeg",
+  "path": "uploads/photos/1775151117_x.jpeg"
+}
+```
+
+L'ancien fichier est supprimé du disque par le serveur. Côté app : invalider le cache image après réception (§4.6).
 
 ### 7.6 `GET /demande` — réponse de référence
 
@@ -749,6 +1063,7 @@ dependencies:
   image_picker: ^1.1.2
   file_picker: ^8.1.2
   flutter_image_compress: ^2.3.0    # cf. D5 — limite 2 Mo
+  image_cropper: ^8.0.2             # recadrage carré de la photo — §4.6
   cached_network_image: ^3.4.1
   open_filex: ^4.5.0                # ouvrir un CV/diplôme téléchargé
   permission_handler: ^11.3.1
@@ -785,7 +1100,8 @@ lib/
 │   ├── auth/
 │   │   ├── data/   (auth_api.dart, auth_repository.dart)
 │   │   ├── domain/ (utilisateur.dart)
-│   │   └── ui/     (login, register, verify_email, forgot_password)
+│   │   └── ui/     (login, register, verify_email, forgot_password,
+│   │                change_password)                     # §3.6 / §8.12
 │   ├── reference/
 │   │   ├── data/   (ref_api.dart, ref_repository.dart)  # cache-first
 │   │   └── domain/ (region, departement, secteur, emploi, academic, handicap, country)
@@ -798,9 +1114,9 @@ lib/
 │           │   ├── step2_formations.dart
 │           │   ├── step3_experiences.dart
 │           │   └── step4_voeux.dart
-│           ├── summary_page.dart   # équivalent de userdata.summary
-│           ├── files_page.dart
-│           └── profile_photo.dart
+│           ├── cv_page.dart        # écran « Mon CV » — §4.7 / §8.11
+│           ├── files_page.dart     # CV + diplômes (§4.2, §4.4)
+│           └── profile_photo.dart  # avatar + upload isolé — §4.6 / §8.10
 └── shared/widgets/                 # champs, sélecteur cascade, uploader
 ```
 
@@ -916,13 +1232,15 @@ const fieldStep = <String, int>{
   'situationmatrimoniale': 1, 'nombreenfant': 1, 'telephone1': 1, 'telephone2': 1,
   'addresse': 1, 'country_id': 1, 'regionnaiss_id': 1, 'departementnaiss_id': 1,
   'regionresidence_id': 1, 'departementresidence_id': 1, 'handicap_id': 1,
+  'photo_profil': 1,                    // étape 1, cf. §4.6
 
-  'formations': 2, 'diplome_file': 2, 'cv_file': 2, 'photo_profil': 2,
+  'formations': 2, 'diplome_file': 2,   // les diplômes sont à l'étape 2
 
   'hasExperience': 3, 'experiences': 3,
 
   'emploi1_id': 4, 'emploi2_id': 4,
   'anneeexperience1': 4, 'anneeexperience2': 4, 'cv_summary': 4,
+  'cv_file': 4,                         // le CV est à l'étape 4, PAS à l'étape 2
 };
 ```
 
@@ -951,6 +1269,97 @@ Le formulaire compte ~30 champs plus deux listes dynamiques. Sur un réseau inst
 | Téléphone | `varchar(45)`, aucun format imposé en base : valider côté app (format sénégalais + international) |
 | URLs de fichiers | Toujours `Uri.encodeFull()` (espaces et accents dans les noms) |
 | Photo de profil | Gérer les deux préfixes historiques : `uploads/photos/…` **et** `storage/uploads/…` (une ligne legacy utilise le second) |
+| CV / diplômes | Jamais affichés dans le résumé web (§4.7) — les exposer dans un écran « Mes documents » (**D12**) |
+
+### 8.10 Photo de profil — implémentation
+
+Contrat métier complet en §4.6. Côté Flutter, la chaîne à respecter est **sélection → recadrage → compression → contrôle de taille → upload → invalidation du cache**.
+
+```dart
+Future<void> changerPhoto(ImageSource source) async {
+  final picked = await ImagePicker().pickImage(
+    source: source,
+    preferredCameraDevice: CameraDevice.front,  // portrait
+  );
+  if (picked == null) return;
+
+  // 1) Recadrage carré — le serveur ne redimensionne rien
+  final cropped = await ImageCropper().cropImage(
+    sourcePath: picked.path,
+    aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+  );
+  if (cropped == null) return;
+
+  // 2) Compression : limite serveur = 2048 Ko (max:2048)
+  final bytes = await FlutterImageCompress.compressWithFile(
+    cropped.path, minWidth: 800, minHeight: 800, quality: 85, format: CompressFormat.jpeg,
+  );
+  if (bytes == null) return;
+
+  // 3) Garde-fou explicite plutôt qu'un 422 opaque
+  if (bytes.length > 2 * 1024 * 1024) {
+    throw const AppException('Image trop lourde après compression, réessayez.');
+  }
+
+  // 4) Upload isolé — la demande doit déjà exister
+  final form = FormData.fromMap({
+    'photo_profil': MultipartFile.fromBytes(bytes, filename: 'photo.jpg'),
+  });
+  final res = await dio.post('/demande/photo', data: form,
+      onSendProgress: (sent, total) => _progress.value = sent / total);
+
+  // 5) Invalider le cache, sinon l'ancienne image reste affichée
+  final url = res.data['photo_profil'] as String;
+  await CachedNetworkImage.evictFromCache(url);
+  _photoUrl.value = url;
+}
+```
+
+Points de vigilance :
+
+- **Tant que la demande n'existe pas, il n'y a pas de dossier à photographier.** Au premier enregistrement, la photo part dans le `POST /demande` (§4.6 flux A) ; l'upload isolé n'est disponible qu'ensuite.
+- **Ne jamais envoyer `photo_profil: null`** dans un `PUT /demande` : l'omettre conserve l'existante, l'envoyer vide risque de l'effacer.
+- L'avatar par défaut doit être un **asset local** (initiales du candidat), pas `images/images.png` côté serveur.
+- Afficher l'état d'upload sur le bouton lui-même (« Chargement… », désactivé), comme le web.
+
+### 8.11 Écran « Mon CV » — implémentation
+
+Structure et contenu exact en §4.7. Recommandations d'implémentation :
+
+| Sujet | Règle |
+| :--- | :--- |
+| Source | **toujours** `GET /demande`, jamais un cache d'affichage — c'est l'écran de vérité du candidat |
+| N° d'inscription | `utilisateur.id`, affiché en évidence et **copiable** (`Clipboard.setData`) — c'est la référence administrative |
+| État « pas de dossier » | `GET /demande` → `404` ⇒ écran d'accueil « Créer ma demande », pas une erreur |
+| Vœux vides | Afficher « Non renseigné » ; ne jamais supposer `emploi1 != null` (**B10**) |
+| Formations / expériences | Une carte par entrée ; respecter les états vides du web (« Aucune formation renseignée », « Pas d'expérience ») |
+| Pluriel | `{years} année` / `{years} années` — la règle du web (`> 1`) |
+| Dates | L'API renvoie `YYYY-MM-DD` ; afficher en `dd/MM/yyyy` (le web le fait côté serveur) |
+| Boutons « Modifier » | Un **par section**, ouvrant le wizard à l'étape correspondante (**D13**, mapping §8.7) — c'est le principal gain d'UX sur le web |
+| Documents | Section « Mes documents » (**D12**) : photo, CV, diplômes, avec téléchargement via `open_filex` |
+| Export | `GET /demande/cv.pdf` si le backend le fournit, pour garantir un CV identique à celui de l'administration ; sinon génération locale avec le paquet `pdf` |
+| Rafraîchissement | `RefreshIndicator` — le dossier peut être modifié par un admin (champ `recruted`, notamment) |
+
+### 8.12 Écran de changement de mot de passe
+
+Contrat en §3.6.
+
+```dart
+await dio.post('/auth/password/change', data: {
+  'current_password': current,
+  'new_password': next,
+  'new_password_confirmation': confirm,   // nom imposé par la règle `confirmed`
+});
+```
+
+| Sujet | Règle |
+| :--- | :--- |
+| Champs | Les trois, avec **les noms exacts ci-dessus** |
+| Validation locale | `new_password.length >= 8` et `new_password == confirmation`, avant l'appel |
+| Erreur « mot de passe actuel » | Arrive sous la clé `errors.current_password` — l'afficher **sous ce champ**, pas en bannière globale |
+| Après succès | Si l'API renvoie un nouveau token (**D15**), le **remplacer** dans le stockage sécurisé, sinon la session mobile tombera en `401` |
+| Comptes legacy | Si le backend n'a pas corrigé **B11**, un compte migré recevra « Le mot de passe actuel est incorrect. » alors que son mot de passe est bon — prévoir un message d'aide renvoyant vers « mot de passe oublié » |
+| Emplacement | Le web le place dans le menu « Bonjour {prénom} » du résumé ; sur mobile, un écran « Mon compte » (mot de passe, email, n° d'inscription, déconnexion) est plus lisible |
 
 ---
 
@@ -960,8 +1369,8 @@ Le formulaire compte ~30 champs plus deux listes dynamiques. Sur un réseau inst
 
 1. **B1** charger `routes/api.php` · **B2** installer Sanctum + `HasApiTokens` · **B8** corriger `APP_URL`.
 2. **B3** `ALTER TABLE userdata MODIFY autresdiplomes JSON NULL;` — *sans quoi les formations multiples sont impossibles.*
-3. **B4** corriger `20` → `14` pour « sans diplôme ».
-4. Endpoints d'auth (§7.2) en **réutilisant la double vérification bcrypt/Symfony3**.
+3. **B4** corriger `20` → `14` pour « sans diplôme » · **B9** lever la collision de nom `password.update` · **B10** protéger les vœux nuls dans le résumé · **B5** réparer la route de photo.
+4. Endpoints d'auth (§7.2) en **réutilisant la double vérification bcrypt/Symfony3** — login **et** changement de mot de passe (**B11**).
 5. Endpoints de référence (§7.3) + `/ref/bootstrap`.
 6. Endpoints de la demande (§7.5) avec `FormRequest` partagés entre web et API, et `DemandeResource` (§7.6).
 7. **D1** rendre `update()` non destructif · **D2** ajouter `country_id`/`addresse`.
@@ -974,8 +1383,8 @@ Le formulaire compte ~30 champs plus deux listes dynamiques. Sur un réseau inst
 2. Écrans d'auth sur mocks, en attendant les endpoints réels.
 3. Module référentiel + cache Hive (les 4 routes `departements`/`emplois` existantes permettent de démarrer dès maintenant).
 4. Wizard 4 étapes + brouillon local (le contrat de §4 est **stable** : c'est la validation réelle du contrôleur).
-5. Upload de fichiers + photo de profil.
-6. Résumé du dossier, édition, changement de mot de passe.
+5. Upload de fichiers (diplômes à l'étape 2, CV à l'étape 4) + photo de profil (§8.10).
+6. Écran « Mon CV » (§8.11) avec boutons « Modifier » par section, puis écran « Mon compte » + changement de mot de passe (§8.12).
 7. Branchement sur l'API réelle, gestion des `422`, hors ligne, états vides et d'erreur.
 
 ---
@@ -1018,7 +1427,10 @@ SELECT * FROM academic WHERE libelle = 'sansdiplome';  -- id = 14
 
 | Sujet | Fichier |
 | :--- | :--- |
-| Inscription / connexion / changement de mdp | [app/Http/Controllers/AuthController.php](app/Http/Controllers/AuthController.php) |
+| Inscription / connexion / **changement de mdp réellement utilisé** | [app/Http/Controllers/AuthController.php](app/Http/Controllers/AuthController.php) |
+| Changement de mdp — variante morte (cause de **B9**) | [app/Http/Controllers/PasswordController.php](app/Http/Controllers/PasswordController.php) |
+| Formulaire de changement de mdp (noms de champs) | [resources/views/auth/change-password.blade.php](resources/views/auth/change-password.blade.php) |
+| Réinitialisation « chatbot » (email + numberid) | [app/Http/Controllers/Api/ResetPasswordController.php](app/Http/Controllers/Api/ResetPasswordController.php) |
 | **Le formulaire de demande (contrat d'autorité)** | [app/Http/Controllers/UserdataController.php](app/Http/Controllers/UserdataController.php) |
 | Vérification d'email | [app/Http/Controllers/VerificationController.php](app/Http/Controllers/VerificationController.php) |
 | Modèle utilisateur réel | [app/Models/Utilisateur.php](app/Models/Utilisateur.php) |
@@ -1030,5 +1442,7 @@ SELECT * FROM academic WHERE libelle = 'sansdiplome';  -- id = 14
 | Hash Symfony 3 legacy | [app/Services/PasswordService.php](app/Services/PasswordService.php) |
 | Middleware « compte activé » | [app/Http/Middleware/CheckAccountEnabled.php](app/Http/Middleware/CheckAccountEnabled.php) |
 | Wizard web à reproduire (4 étapes) | [resources/views/userdata/create.blade.php](resources/views/userdata/create.blade.php) |
-| Écran de résumé à reproduire | [resources/views/userdata/summary.blade.php](resources/views/userdata/summary.blade.php) |
+| **Écran « Mon CV » + photo à reproduire (§4.6, §4.7)** | [resources/views/userdata/summary.blade.php](resources/views/userdata/summary.blade.php) |
+| Wizard d'édition (4 étapes) ouvert par « Mettre à jour mes infos » | [resources/views/userdata/edit.blade.php](resources/views/userdata/edit.blade.php) |
+| CV imprimable — `{id}` = id **utilisateur** (§4.7) | [resources/views/userdata/resume.blade.php](resources/views/userdata/resume.blade.php) |
 | Historique des correctifs de sécurité | [AUDIT_CORRECTIONS.md](AUDIT_CORRECTIONS.md) |

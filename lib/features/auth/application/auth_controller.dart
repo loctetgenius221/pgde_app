@@ -80,6 +80,36 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
   Future<void> renvoyerEmailDeVerification() =>
       ref.read(authApiProvider).resendVerificationEmail();
 
+  /// Active le compte avec le code reçu par email (§3.4, option OTP).
+  Future<void> verifierAvecCode(String code) async {
+    state = AsyncData(await ref.read(authApiProvider).verifierAvecCode(code));
+  }
+
+  /// Les trois opérations de mot de passe ne changent **pas** l'état de
+  /// session : elles réussissent ou lèvent, et c'est le formulaire appelant
+  /// qui l'affiche.
+  Future<void> changerMotDePasse({
+    required String actuel,
+    required String nouveau,
+  }) => ref
+      .read(authApiProvider)
+      .changerMotDePasse(actuel: actuel, nouveau: nouveau);
+
+  Future<void> demanderReinitialisation({
+    required String email,
+    required String numberid,
+  }) => ref
+      .read(authApiProvider)
+      .demanderReinitialisation(email: email, numberid: numberid);
+
+  Future<void> reinitialiser({
+    required String jeton,
+    required String email,
+    required String motDePasse,
+  }) => ref
+      .read(authApiProvider)
+      .reinitialiser(jeton: jeton, email: email, motDePasse: motDePasse);
+
   /// Recharge le profil, par exemple après validation de l'email.
   Future<void> rafraichir() async {
     state = AsyncData(await ref.read(authApiProvider).me());

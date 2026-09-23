@@ -8,6 +8,7 @@ import '../../../../core/ui/liste_dynamique.dart';
 import '../../../reference/domain/referentiel.dart';
 import '../../domain/demande.dart';
 import 'etape_wizard.dart';
+import 'pieces_jointes.dart';
 
 /// Étape 2 — formations (§4).
 ///
@@ -62,6 +63,10 @@ class EtapeFormations extends StatelessWidget {
           const SizedBox(height: Espace.md),
           _AvertissementFormationsMultiples(),
         ],
+
+        // Les justificatifs appartiennent à la même étape que les formations
+        // (§4, étape 2) : c'est le moment où le candidat les a sous la main.
+        SectionDocuments(demande: demande),
       ],
     );
   }

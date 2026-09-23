@@ -6,7 +6,9 @@ import '../../../../core/ui/champs.dart';
 import '../../../../core/ui/icone.dart';
 import '../../../reference/domain/referentiel.dart';
 import '../../domain/demande.dart';
+import '../../domain/telephone.dart';
 import 'etape_wizard.dart';
+import 'pieces_jointes.dart';
 
 /// Étape 1 — identité et résidence (§4).
 ///
@@ -31,11 +33,17 @@ class EtapeIdentite extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: <Widget>[
+      // La photo est une pièce d'identité : sa place est avec l'état civil,
+      // en ouverture, pas au milieu des diplômes.
+      SectionPhoto(demande: demande),
+
       const TitreSection('État civil'),
 
       ChampDate(
+        // Pas d'icône de tête : `ChampDate` pose déjà un calendrier en fin de
+        // champ, qui est l'affordance du sélecteur. Deux fois la même icône
+        // sur une ligne ne dit rien de plus.
         libelle: 'Date de naissance',
-        icone: Icones.dateNaissance,
         valeur: demande.dateNaissance,
         erreur: erreurs?.errorFor('datenaiss'),
         onChange: (v) => modifier((d) => d.copyWith(dateNaissance: v)),
@@ -90,7 +98,8 @@ class EtapeIdentite extends StatelessWidget {
         etiquette: (d) => d.libelle,
         erreur: erreurs?.errorFor('departementnaiss_id'),
         messageListeVide: 'Choisissez d’abord une région',
-        onChange: (v) => modifier((d) => d.copyWith(departementNaissanceId: v?.id)),
+        onChange: (v) =>
+            modifier((d) => d.copyWith(departementNaissanceId: v?.id)),
       ),
 
       const TitreSection('Résidence'),
@@ -166,7 +175,11 @@ class EtapeIdentite extends StatelessWidget {
         valeur: demande.telephone1,
         clavier: TextInputType.phone,
         formatteurs: Formats.telephone,
-        erreur: erreurs?.errorFor('telephone1'),
+        // Le serveur accepte n'importe quoi dans un varchar(45) : c'est
+        // ici que se joue la joignabilité du candidat (§8.9).
+        erreur:
+            erreurs?.errorFor('telephone1') ??
+            Telephone.refus(demande.telephone1),
         onChange: (v) => modifier((d) => d.copyWith(telephone1: v)),
       ),
       const SizedBox(height: Espace.sm),
@@ -177,7 +190,11 @@ class EtapeIdentite extends StatelessWidget {
         valeur: demande.telephone2,
         clavier: TextInputType.phone,
         formatteurs: Formats.telephone,
-        erreur: erreurs?.errorFor('telephone2'),
+        // Le serveur accepte n'importe quoi dans un varchar(45) : c'est
+        // ici que se joue la joignabilité du candidat (§8.9).
+        erreur:
+            erreurs?.errorFor('telephone2') ??
+            Telephone.refus(demande.telephone2),
         onChange: (v) => modifier((d) => d.copyWith(telephone2: v)),
       ),
 
@@ -236,11 +253,13 @@ class EtapeIdentite extends StatelessWidget {
   Region? _region(int? id) => _parId(referentiel.regions, id, (r) => r.id);
   Departement? _departement(int? id) =>
       _parId(referentiel.departements, id, (d) => d.id);
-  Handicap? _handicap(int? id) => _parId(referentiel.handicaps, id, (h) => h.id);
+  Handicap? _handicap(int? id) =>
+      _parId(referentiel.handicaps, id, (h) => h.id);
   Pays? _pays(int? id) => _parId(referentiel.countries, id, (p) => p.id);
 
-  List<Departement> _departementsDe(int? regionId) =>
-      regionId == null ? const <Departement>[] : referentiel.departementsDe(regionId);
+  List<Departement> _departementsDe(int? regionId) => regionId == null
+      ? const <Departement>[]
+      : referentiel.departementsDe(regionId);
 
   static T? _parId<T>(List<T> elements, int? id, int Function(T) cle) {
     if (id == null) return null;

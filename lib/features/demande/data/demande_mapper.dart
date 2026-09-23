@@ -1,3 +1,4 @@
+import '../../../core/config/env.dart';
 import '../../../core/json/converters.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/demande.dart';
@@ -73,7 +74,49 @@ abstract final class DemandeMapper {
       anneesExperience1: _entier(_objet(voeux['emploi1'])['annees']) ?? 0,
       anneesExperience2: _entier(_objet(voeux['emploi2'])['annees']) ?? 0,
       resumeCv: _texte(json['cv_summary']),
+
+      diplomes: _fichiers(_objet(json['fichiers'])['diplomes']),
+      cv: _fichiers(_objet(json['fichiers'])['cv']),
+      photo: _fichier(_objet(json['fichiers'])['photo_profil']),
     );
+  }
+
+  static List<FichierJoint> _fichiers(Object? valeur) =>
+      _liste(valeur).map(_fichier).nonNulls.toList();
+
+  static FichierJoint? _fichier(Object? valeur) {
+    // Une réponse peut ne donner qu'un chemin brut : la colonne
+    // `photo_profil` est un simple varchar en base (§2.3).
+    if (valeur is String) {
+      return valeur.isEmpty ? null : _depuisChemin(valeur);
+    }
+    if (valeur is! Map) return null;
+
+    final Json json = _objet(valeur);
+    final String chemin = _texte(json['path']);
+    if (chemin.isEmpty) return null;
+
+    final String url = _texte(json['url']);
+    return FichierJoint(
+      chemin: chemin,
+      url: url.isEmpty ? _adresse(chemin) : url,
+      nom: _texte(json['nom']),
+      taille: _entier(json['taille']),
+    );
+  }
+
+  static FichierJoint _depuisChemin(String chemin) =>
+      FichierJoint(chemin: chemin, url: _adresse(chemin));
+
+  /// §8.9 — deux préfixes historiques coexistent pour la photo de profil :
+  /// `uploads/photos/…` et `storage/uploads/…`. Aucun des deux ne doit être
+  /// « corrigé » : on les sert tels quels, en les rendant simplement absolus.
+  static String _adresse(String chemin) {
+    if (chemin.startsWith('http://') || chemin.startsWith('https://')) {
+      return chemin;
+    }
+    final String relatif = chemin.startsWith('/') ? chemin.substring(1) : chemin;
+    return '${Env.racineFichiers}/$relatif';
   }
 
   // -------------------------------------------------------------------------

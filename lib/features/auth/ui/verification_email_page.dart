@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
@@ -13,6 +14,11 @@ import '../application/auth_controller.dart';
 /// Le serveur laisse un compte non vérifié se connecter (BUG-02) et
 /// `hasVerifiedEmail()` renvoie toujours `false` (bug de cast, §3.5) : c'est
 /// donc `enabled` — et lui seul — qui fait foi, côté app.
+///
+/// §3.4 propose deux voies pour l'activation : le lien signé du web via deep
+/// link, ou un **code à six chiffres**. La seconde est retenue : elle ne
+/// dépend ni d'App Links, ni d'Universal Links, ni de la capacité du
+/// navigateur à rendre la main à l'application.
 class VerificationEmailPage extends ConsumerStatefulWidget {
   const VerificationEmailPage({super.key});
 
@@ -23,26 +29,48 @@ class VerificationEmailPage extends ConsumerStatefulWidget {
 
 class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
     with FormSubmission {
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  void _annoncer(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _valider() async {
+    final String code = _code.text.trim();
+    if (code.length < 6) {
+      _annoncer('Saisissez les six chiffres du code.');
+      return;
+    }
+    // Le routeur bascule seul vers l'accueil dès que `enabled` passe à vrai.
+    await soumettre(
+      () => ref.read(authControllerProvider.notifier).verifierAvecCode(code),
+    );
+  }
+
   Future<void> _renvoyer() async {
-    final succes = await soumettre(
+    final bool succes = await soumettre(
       () => ref
           .read(authControllerProvider.notifier)
           .renvoyerEmailDeVerification(),
     );
     if (!succes || !mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          Env.useMocks
-              ? 'Compte activé (raccourci de développement).'
-              : 'Un nouvel email de vérification vous a été envoyé.',
-        ),
-      ),
+    _annoncer(
+      Env.useMocks
+          ? 'Code envoyé. En démonstration, saisissez 123456.'
+          : 'Un nouveau code vous a été envoyé.',
     );
-    await ref.read(authControllerProvider.notifier).rafraichir();
   }
 
+  /// Le lien signé du web reste utilisable : si le candidat l'a suivi dans son
+  /// navigateur, cette action relit simplement son profil.
   Future<void> _actualiser() =>
       soumettre(() => ref.read(authControllerProvider.notifier).rafraichir());
 
@@ -92,9 +120,8 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
                   ),
                   const SizedBox(height: Espace.sm),
                   Text(
-                    'Un email de vérification a été envoyé à '
-                    '${utilisateur?.email ?? 'votre adresse'}. '
-                    'Ouvrez-le pour activer votre compte, puis revenez ici.',
+                    'Un code à six chiffres a été envoyé à '
+                    '${utilisateur?.email ?? 'votre adresse'}.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -104,16 +131,43 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
 
                   BandeauErreur(erreurGlobale),
 
+                  TextField(
+                    controller: _code,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      letterSpacing: 8,
+                    ),
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6),
+                    ],
+                    decoration: InputDecoration(
+                      hintText: '••••••',
+                      helperText: Env.useMocks
+                          ? 'Code de démonstration : 123456'
+                          : null,
+                      errorText: erreurDuChamp('code'),
+                    ),
+                    onSubmitted: (_) => _valider(),
+                  ),
+                  const SizedBox(height: Espace.lg),
+
                   FilledButton(
-                    onPressed: envoiEnCours ? null : _actualiser,
+                    onPressed: envoiEnCours ? null : _valider,
                     child: envoiEnCours
                         ? const IndicateurBouton()
-                        : const Text('J’ai activé mon compte'),
+                        : const Text('Activer mon compte'),
                   ),
                   const SizedBox(height: Espace.sm),
                   OutlinedButton(
                     onPressed: envoiEnCours ? null : _renvoyer,
-                    child: const Text('Renvoyer l’email'),
+                    child: const Text('Renvoyer le code'),
+                  ),
+                  const SizedBox(height: Espace.xs),
+                  TextButton(
+                    onPressed: envoiEnCours ? null : _actualiser,
+                    child: const Text('J’ai activé depuis le lien reçu'),
                   ),
                 ],
               ),

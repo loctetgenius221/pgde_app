@@ -29,9 +29,10 @@ enum _Etape {
   pieces(
     titre: 'Préparez vos pièces',
     texte:
-        'Munissez-vous de votre CNI ou passeport, de vos diplômes et de '
-        'votre CV. Les documents s’envoient en PDF, Word ou texte, '
-        '2 Mo maximum par fichier.',
+        'Munissez-vous de votre CNI ou passeport, d’une photo de profil et '
+        'de vos diplômes. Les documents s’envoient en PDF, Word ou texte, '
+        '2 Mo maximum par fichier. Votre CV, lui, sera établi à partir des '
+        'informations de votre dossier.',
   ),
   etapes(
     titre: 'Quatre étapes, à votre rythme',
