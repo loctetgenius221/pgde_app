@@ -91,7 +91,7 @@ class _WizardPageState extends ConsumerState<WizardPage> {
     try {
       await ref.read(demandeControllerProvider.notifier).enregistrer();
       if (!mounted) return;
-      _annoncer('Votre demande a bien été enregistrée.');
+      _annoncer('Demande enregistrée.');
       Navigator.of(context).pop();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -273,7 +273,7 @@ class _BarreNavigation extends StatelessWidget {
             children: <Widget>[
               Text(
                 'Étape ${etape.numero} sur ${EtapeWizard.values.length} · '
-                'brouillon conservé sur cet appareil',
+                'brouillon enregistré',
                 style: theme.textTheme.bodySmall,
                 textAlign: TextAlign.center,
               ),

@@ -9,7 +9,11 @@ typedef FieldErrors = Map<String, List<String>>;
 /// couche réseau, tout échec — transport ou métier — est un [ApiException].
 /// Les dépôts, contrôleurs et écrans ignorent donc totalement Dio.
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode, this.fieldErrors = const {}});
+  const ApiException(
+    this.message, {
+    this.statusCode,
+    this.fieldErrors = const {},
+  });
 
   final String message;
   final int? statusCode;
@@ -87,7 +91,10 @@ class ApiException implements Exception {
     403 => "Vous n'avez pas accès à cette ressource.",
     404 => 'Ressource introuvable.',
     409 => 'Vous avez déjà une demande enregistrée.',
-    413 => 'Fichier trop volumineux (2 Mo maximum par fichier).',
+    // Le plafond dépend du type de pièce (4 Mo pour la photo, 8 Mo pour les
+    // documents) : le message reste général, `ReglesFichiers` donne le
+    // chiffre exact avant l'envoi.
+    413 => 'Fichier trop volumineux.',
     422 => 'Certaines informations sont invalides.',
     429 => 'Trop de tentatives. Réessayez dans quelques instants.',
     _ => 'Une erreur est survenue. Merci de réessayer.',

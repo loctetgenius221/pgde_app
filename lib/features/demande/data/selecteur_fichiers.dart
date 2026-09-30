@@ -40,13 +40,13 @@ class SelecteurFichiersAppareil implements SelecteurFichiers {
     return choisie == null ? null : _sousLaLimite(File(choisie.path));
   }
 
-  /// §6.2 D5 — une photo de smartphone dépasse les 2 Mo acceptés par le
-  /// serveur. On comprime par paliers **avant** l'envoi : laisser le serveur
-  /// refuser, c'est faire attendre le candidat pour rien.
+  /// Une photo de smartphone dépasse les 4 Mo acceptés par le serveur
+  /// (contrat §6.1). On comprime par paliers **avant** l'envoi : laisser le
+  /// serveur refuser, c'est faire attendre le candidat pour rien.
   Future<File> _sousLaLimite(File source) async {
     File courant = source;
     for (final int qualite in <int>[80, 62, 45, 30]) {
-      if (courant.lengthSync() <= ReglesFichiers.tailleMaxOctets) break;
+      if (courant.lengthSync() <= ReglesFichiers.tailleMaxPhoto) break;
 
       final Uint8List? comprimee = await FlutterImageCompress.compressWithFile(
         courant.path,
@@ -72,7 +72,9 @@ class SelecteurFichiersAppareil implements SelecteurFichiers {
       type: FileType.custom,
       // Le sélecteur natif filtre déjà ; `ReglesFichiers` revérifie ensuite,
       // car tous les systèmes ne respectent pas ce filtre.
-      allowedExtensions: ReglesFichiers.extensionsDocument.toList(),
+      allowedExtensions: ReglesFichiers.extensionsAdmises(
+        TypeFichier.diplome,
+      ).toList(),
     );
     return choisis
         .map((PlatformFile f) => f.path)
@@ -95,28 +97,24 @@ final selecteurFichiersProvider = Provider<SelecteurFichiers>(
 class PiecesEnAttente {
   const PiecesEnAttente({
     this.photo,
-    this.diplomes = const <File>[],
-    this.cv = const <File>[],
+    this.justificatifs = const <int, File>{},
   });
 
   final File? photo;
-  final List<File> diplomes;
-  final List<File> cv;
 
-  bool get estVide => photo == null && diplomes.isEmpty && cv.isEmpty;
+  /// Justificatifs choisis, indexés par le **rang de la formation** qu'ils
+  /// prouvent. Un seul par formation : c'est un justificatif, pas un dossier.
+  final Map<int, File> justificatifs;
 
-  int get nombre => (photo == null ? 0 : 1) + diplomes.length + cv.length;
+  bool get estVide => photo == null && justificatifs.isEmpty;
 
-  List<File> de(TypeFichier type) =>
-      type == TypeFichier.diplome ? diplomes : cv;
-
-  PiecesEnAttente avec(TypeFichier type, List<File> fichiers) =>
-      type == TypeFichier.diplome
-      ? PiecesEnAttente(photo: photo, diplomes: fichiers, cv: cv)
-      : PiecesEnAttente(photo: photo, diplomes: diplomes, cv: fichiers);
+  int get nombre => (photo == null ? 0 : 1) + justificatifs.length;
 
   PiecesEnAttente avecPhoto(File? fichier) =>
-      PiecesEnAttente(photo: fichier, diplomes: diplomes, cv: cv);
+      PiecesEnAttente(photo: fichier, justificatifs: justificatifs);
+
+  PiecesEnAttente avecJustificatifs(Map<int, File> fichiers) =>
+      PiecesEnAttente(photo: photo, justificatifs: fichiers);
 }
 
 class PiecesEnAttenteController extends Notifier<PiecesEnAttente> {
@@ -127,13 +125,24 @@ class PiecesEnAttenteController extends Notifier<PiecesEnAttente> {
 
   void retirerPhoto() => state = state.avecPhoto(null);
 
-  void ajouter(TypeFichier type, List<File> fichiers) =>
-      state = state.avec(type, <File>[...state.de(type), ...fichiers]);
+  void choisirJustificatif(int rang, File fichier) => state = state
+      .avecJustificatifs(<int, File>{...state.justificatifs, rang: fichier});
 
-  void retirer(TypeFichier type, File fichier) => state = state.avec(
-    type,
-    state.de(type).where((f) => f.path != fichier.path).toList(),
+  void retirerJustificatif(int rang) => state = state.avecJustificatifs(
+    <int, File>{...state.justificatifs}..remove(rang),
   );
+
+  /// Une formation retirée décale toutes celles qui la suivaient : les
+  /// justificatifs encore en file doivent suivre le mouvement, sinon ils
+  /// partiraient rattachés à la mauvaise formation.
+  void retirerFormation(int rang) {
+    final Map<int, File> suivant = <int, File>{};
+    state.justificatifs.forEach((int r, File fichier) {
+      if (r < rang) suivant[r] = fichier;
+      if (r > rang) suivant[r - 1] = fichier;
+    });
+    state = state.avecJustificatifs(suivant);
+  }
 
   void vider() => state = const PiecesEnAttente();
 }

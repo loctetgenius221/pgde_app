@@ -56,6 +56,7 @@ flutter:
 
   assets:
     - assets/logo_fp.png
+    - assets/icone-demande-d-emploi.png
 
   fonts:
     - family: Poppins
@@ -70,14 +71,24 @@ flutter:
           weight: 700
 
 # Icône de lancement — `dart run flutter_launcher_icons`
+#
+# `icon_app.png` est produit à partir de `assets/icone-demande-d-emploi.png`,
+# recadré sur son contenu et centré à 82 % d'un canevas transparent de
+# 1024 px.
+#
+# Fond blanc, par deux chemins qui doivent rester cohérents :
+#  - `image_path` porte le dessin **déjà composé** sur du blanc, pour iOS et
+#    les Android antérieurs à 8 ;
+#  - l'icône adaptative reçoit le blanc en couche de fond et le dessin nu en
+#    avant-plan, rentré à 58 % pour survivre au masquage des lanceurs, qui
+#    rognent jusqu'à un tiers du canevas.
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/icon/icon.png
-  # Icône adaptative Android : le logo est rentré à 58 % pour tenir dans la
-  # zone sûre de 66 % imposée par le masquage des lanceurs.
+  image_path: assets/icon/icon_app.png
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/icon/icon_foreground.png
+  adaptive_icon_foreground: assets/icon/icon_app_foreground.png
+  # iOS interdit la transparence dans l'icône de l'app.
   remove_alpha_ios: true
 
 # Splash natif — `dart run flutter_native_splash:create`

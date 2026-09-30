@@ -55,24 +55,21 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
     }
     // On laisse retomber la frappe : une requête par caractère saturerait le
     // point d'entrée, que le cadrage demande justement de throttler.
-    _verifications[champ] = Timer(
-      const Duration(milliseconds: 550),
-      () async {
-        try {
-          final bool libre = await ref
-              .read(authApiProvider)
-              .estDisponible(
-                username: champ == 'username' ? propre : null,
-                email: champ == 'email' ? propre : null,
-                numberid: champ == 'numberid' ? propre : null,
-              );
-          if (mounted) setState(() => _disponible[champ] = libre);
-        } on Object catch (_) {
-          // Hors ligne : on ne dit rien. Le serveur tranchera à l'envoi.
-          if (mounted) setState(() => _disponible.remove(champ));
-        }
-      },
-    );
+    _verifications[champ] = Timer(const Duration(milliseconds: 550), () async {
+      try {
+        final bool libre = await ref
+            .read(authApiProvider)
+            .estDisponible(
+              username: champ == 'username' ? propre : null,
+              email: champ == 'email' ? propre : null,
+              numberid: champ == 'numberid' ? propre : null,
+            );
+        if (mounted) setState(() => _disponible[champ] = libre);
+      } on Object catch (_) {
+        // Hors ligne : on ne dit rien. Le serveur tranchera à l'envoi.
+        if (mounted) setState(() => _disponible.remove(champ));
+      }
+    });
   }
 
   String? _indisponible(String champ) =>
@@ -122,10 +119,7 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         duration: Duration(seconds: 6),
-        content: Text(
-          'Compte créé. Un email de vérification vous a été envoyé : '
-          'activez-le avant de déposer votre demande.',
-        ),
+        content: Text('Compte créé. Activez-le avec le code reçu par email.'),
       ),
     );
   }
@@ -149,14 +143,6 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Text('Créer un compte', style: theme.textTheme.displaySmall),
-                  const SizedBox(height: Espace.xs),
-                  Text(
-                    'Quelques informations suffisent. Votre dossier se '
-                    'remplira ensuite, étape par étape.',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                   const SizedBox(height: Espace.xl),
 
                   BandeauErreur(erreurGlobale),
@@ -199,7 +185,8 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                       prefixIcon: const PrefixeChamp(Icones.piece),
                       helperText: _aideDisponibilite('numberid'),
                       errorText:
-                          erreurDuChamp('numberid') ?? _indisponible('numberid'),
+                          erreurDuChamp('numberid') ??
+                          _indisponible('numberid'),
                     ),
                     validator: (v) => _obligatoire(v, 'numéro de CNI'),
                   ),
@@ -214,11 +201,12 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                       labelText: "Nom d'utilisateur",
                       helperText: _aideDisponibilite(
                         'username',
-                        'C’est avec lui que vous vous connecterez',
+                        'Sert à vous connecter',
                       ),
                       prefixIcon: const PrefixeChamp(Icones.identifiant),
                       errorText:
-                          erreurDuChamp('username') ?? _indisponible('username'),
+                          erreurDuChamp('username') ??
+                          _indisponible('username'),
                     ),
                     validator: (v) => _obligatoire(v, "nom d'utilisateur"),
                   ),
@@ -233,7 +221,8 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                       labelText: 'Adresse email',
                       prefixIcon: const PrefixeChamp(Icones.email),
                       helperText: _aideDisponibilite('email'),
-                      errorText: erreurDuChamp('email') ?? _indisponible('email'),
+                      errorText:
+                          erreurDuChamp('email') ?? _indisponible('email'),
                     ),
                     validator: (v) {
                       final valeur = v?.trim() ?? '';

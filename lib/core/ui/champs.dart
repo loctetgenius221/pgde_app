@@ -15,6 +15,41 @@ import 'responsive.dart';
 /// Quatre composants couvrent l'ensemble ; les écrans ne décrivent plus que
 /// *quoi* saisir, jamais *comment*.
 
+/// Libellé de champ, suivi d'un astérisque quand la saisie est obligatoire.
+///
+/// L'astérisque porte la couleur d'erreur. C'est la convention universelle, et
+/// elle ne dilue pas la règle de la palette : un champ obligatoire laissé vide
+/// **est** ce qui bloquera l'envoi. Le rouge reste donc réservé à ce qui
+/// empêche d'avancer.
+Widget libelleObligatoire(BuildContext context, String libelle) => Text.rich(
+  TextSpan(
+    text: libelle,
+    children: <InlineSpan>[
+      TextSpan(
+        text: ' *',
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
+    ],
+  ),
+);
+
+/// Rappel de la convention, à placer une fois en tête d'étape.
+class LegendeObligatoire extends StatelessWidget {
+  const LegendeObligatoire({super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    // Marge basse indispensable : le libellé flottant du champ qui suit se
+    // dessine **au-dessus** de sa bordure, et venait se poser sur cette
+    // ligne. Sans elle, les deux textes se chevauchent.
+    padding: const EdgeInsets.only(top: Espace.xxs, bottom: Espace.sm),
+    child: Text(
+      '* Champs obligatoires',
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+  );
+}
+
 /// Champ texte piloté par l'état, sans `TextEditingController` chez l'appelant.
 class ChampTexte extends StatefulWidget {
   const ChampTexte({
@@ -29,6 +64,7 @@ class ChampTexte extends StatefulWidget {
     this.lignes = 1,
     this.longueurMax,
     this.majusculesAutomatiques = false,
+    this.obligatoire = false,
     super.key,
   });
 
@@ -43,6 +79,7 @@ class ChampTexte extends StatefulWidget {
   final int lignes;
   final int? longueurMax;
   final bool majusculesAutomatiques;
+  final bool obligatoire;
 
   @override
   State<ChampTexte> createState() => _ChampTexteState();
@@ -85,7 +122,10 @@ class _ChampTexteState extends State<ChampTexte> {
           ? TextCapitalization.words
           : TextCapitalization.none,
       decoration: InputDecoration(
-        labelText: widget.libelle,
+        labelText: widget.obligatoire ? null : widget.libelle,
+        label: widget.obligatoire
+            ? libelleObligatoire(context, widget.libelle)
+            : null,
         helperText: widget.aide,
         errorText: widget.erreur,
         prefixIcon: widget.icone == null ? null : PrefixeChamp(widget.icone!),
@@ -124,6 +164,7 @@ class ChampSelection<T> extends StatelessWidget {
     this.erreur,
     this.recherche = false,
     this.messageListeVide,
+    this.obligatoire = false,
     super.key,
   });
 
@@ -140,6 +181,7 @@ class ChampSelection<T> extends StatelessWidget {
   final bool recherche;
 
   final String? messageListeVide;
+  final bool obligatoire;
 
   bool get _actif => elements.isNotEmpty;
 
@@ -171,7 +213,8 @@ class ChampSelection<T> extends StatelessWidget {
       child: InputDecorator(
         isEmpty: false,
         decoration: InputDecoration(
-          labelText: libelle,
+          labelText: obligatoire ? null : libelle,
+          label: obligatoire ? libelleObligatoire(context, libelle) : null,
           helperText: _actif ? aide : (messageListeVide ?? aide),
           errorText: erreur,
           enabled: _actif,
@@ -319,6 +362,7 @@ class ChoixSegmente<T> extends StatelessWidget {
     required this.etiquette,
     required this.onChange,
     this.erreur,
+    this.obligatoire = false,
     super.key,
   });
 
@@ -328,6 +372,7 @@ class ChoixSegmente<T> extends StatelessWidget {
   final String Function(T) etiquette;
   final ValueChanged<T> onChange;
   final String? erreur;
+  final bool obligatoire;
 
   @override
   Widget build(BuildContext context) {
@@ -336,7 +381,12 @@ class ChoixSegmente<T> extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(libelle, style: theme.textTheme.labelMedium),
+        DefaultTextStyle.merge(
+          style: theme.textTheme.labelMedium,
+          child: obligatoire
+              ? libelleObligatoire(context, libelle)
+              : Text(libelle),
+        ),
         const SizedBox(height: Espace.xs),
         SegmentedButton<T>(
           segments: <ButtonSegment<T>>[
@@ -379,6 +429,7 @@ class ChampDate extends StatelessWidget {
     this.erreur,
     this.premiereDate,
     this.derniereDate,
+    this.obligatoire = false,
     super.key,
   });
 
@@ -389,6 +440,7 @@ class ChampDate extends StatelessWidget {
   final String? erreur;
   final DateTime? premiereDate;
   final DateTime? derniereDate;
+  final bool obligatoire;
 
   @override
   Widget build(BuildContext context) {
@@ -409,7 +461,8 @@ class ChampDate extends StatelessWidget {
       },
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: libelle,
+          labelText: obligatoire ? null : libelle,
+          label: obligatoire ? libelleObligatoire(context, libelle) : null,
           errorText: erreur,
           prefixIcon: icone == null ? null : PrefixeChamp(icone!),
           suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedCalendar03),

@@ -97,7 +97,38 @@ void main() {
     expect(scheme.error, AppColors.rouge);
     expect(scheme.onSurface, AppColors.anthracite);
   });
+
+  test('rien de ce qui surgit n’arrive teinté de vert', () {
+    // `ColorScheme.fromSeed` teinte les rôles `surfaceContainer*` avec la
+    // graine verte, et Material 3 y puise le fond des feuilles, menus et
+    // dialogues. Une feuille de sélection arrivait donc en vert pâle
+    // au-dessus d'une page blanche.
+    final ThemeData clair = AppTheme.light();
+
+    expect(clair.bottomSheetTheme.backgroundColor, AppColors.surfaceClaire);
+    expect(
+      clair.bottomSheetTheme.modalBackgroundColor,
+      AppColors.surfaceClaire,
+    );
+    expect(clair.popupMenuTheme.color, AppColors.surfaceClaire);
+    expect(clair.dialogTheme.backgroundColor, AppColors.surfaceClaire);
+    expect(clair.datePickerTheme.backgroundColor, AppColors.surfaceClaire);
+
+    // La teinte d'élévation reverdirait la surface dès qu'elle s'élève :
+    // la couper est aussi nécessaire que de poser le fond.
+    expect(clair.bottomSheetTheme.surfaceTintColor, Colors.transparent);
+    expect(clair.popupMenuTheme.surfaceTintColor, Colors.transparent);
+    expect(clair.dialogTheme.surfaceTintColor, Colors.transparent);
+  });
+
+  test('le thème sombre garde ses surfaces sombres', () {
+    // Forcer le blanc partout aurait crevé l'écran en thème sombre.
+    final ThemeData sombre = AppTheme.dark();
+    expect(sombre.bottomSheetTheme.backgroundColor, AppColors.surfaceSombre);
+    expect(sombre.popupMenuTheme.color, AppColors.surfaceSombre);
+  });
 }
+
 
 String _hex(Color c) =>
     ((c.r * 255).round() << 16 | (c.g * 255).round() << 8 | (c.b * 255).round())

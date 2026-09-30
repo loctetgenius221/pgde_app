@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_dimens.dart';
@@ -6,6 +7,7 @@ import '../../../../core/ui/champs.dart';
 import '../../../../core/ui/icone.dart';
 import '../../../../core/ui/liste_dynamique.dart';
 import '../../../reference/domain/referentiel.dart';
+import '../../data/selecteur_fichiers.dart';
 import '../../domain/demande.dart';
 import 'etape_wizard.dart';
 import 'pieces_jointes.dart';
@@ -17,7 +19,11 @@ import 'pieces_jointes.dart';
 /// occupe déjà 183 (bloqueur B3). Tant qu'elle n'est pas migrée, une deuxième
 /// formation fera échouer l'enregistrement avec une erreur SQL 1406 : on
 /// prévient ici plutôt que de laisser le candidat perdre sa saisie.
-class EtapeFormations extends StatelessWidget {
+///
+/// Chaque formation porte **son** justificatif, dans sa propre carte : le
+/// rattachement se fait au moment où le candidat vient de saisir le diplôme,
+/// et non après coup depuis une pile de fichiers anonymes.
+class EtapeFormations extends ConsumerWidget {
   const EtapeFormations({
     required this.demande,
     required this.referentiel,
@@ -32,7 +38,7 @@ class EtapeFormations extends StatelessWidget {
   final Modification modifier;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final List<Academic> niveaux = referentiel.academicsOrdonnes;
 
     return Column(
@@ -40,19 +46,21 @@ class EtapeFormations extends StatelessWidget {
       children: <Widget>[
         const TitreSection(
           'Vos formations',
-          aide: 'Commencez par la plus élevée. Vous pouvez en ajouter '
-              'autant que nécessaire.',
+          aide: 'Commencez par la plus élevée.',
         ),
 
         ListeDynamique<Formation>(
           elements: demande.formations,
           libelleAjout: 'Ajouter une formation',
-          messageVide: 'Aucune formation enregistrée pour le moment.',
+          messageVide: 'Aucune formation.',
           nouveau: () => const Formation(academicId: 0),
           titre: (i) => 'Formation ${i + 1}',
           onChange: (liste) => modifier((d) => d.copyWith(formations: liste)),
-          contenu: (formation, remplacer) => _ChampsFormation(
+          onRetirer: (rang) => _retirerLeJustificatif(ref, rang),
+          contenu: (rang, formation, remplacer) => _ChampsFormation(
+            rang: rang,
             formation: formation,
+            justificatif: demande.justificatifDe(rang),
             niveaux: niveaux,
             erreurs: erreurs,
             onChange: remplacer,
@@ -64,23 +72,32 @@ class EtapeFormations extends StatelessWidget {
           _AvertissementFormationsMultiples(),
         ],
 
-        // Les justificatifs appartiennent à la même étape que les formations
-        // (§4, étape 2) : c'est le moment où le candidat les a sous la main.
-        SectionDocuments(demande: demande),
       ],
     );
   }
+
+  /// Une formation qui s'en va emporte son justificatif.
+  ///
+  /// Rien à supprimer côté serveur : le contrat §6 n'expose pas de route pour
+  /// cela, et le prochain `PUT /candidat/formations` n'enverra tout
+  /// simplement plus cette ligne ni son `existing_diplome_file`.
+  void _retirerLeJustificatif(WidgetRef ref, int rang) =>
+      ref.read(piecesEnAttenteProvider.notifier).retirerFormation(rang);
 }
 
 class _ChampsFormation extends StatelessWidget {
   const _ChampsFormation({
+    required this.rang,
     required this.formation,
+    required this.justificatif,
     required this.niveaux,
     required this.erreurs,
     required this.onChange,
   });
 
+  final int rang;
   final Formation formation;
+  final FichierJoint? justificatif;
   final List<Academic> niveaux;
   final ApiException? erreurs;
   final ValueChanged<Formation> onChange;
@@ -135,6 +152,11 @@ class _ChampsFormation extends StatelessWidget {
           onChange: (v) =>
               onChange(formation.copyWith(anneeDiplome: int.tryParse(v))),
         ),
+
+        // Rien à prouver sans diplôme (§8.9) : le justificatif suit donc
+        // exactement la même condition que les champs qu'il vient appuyer.
+        const SizedBox(height: Espace.sm),
+        JustificatifFormation(rang: rang, depose: justificatif),
       ],
     ],
   );
@@ -169,10 +191,8 @@ class _AvertissementFormationsMultiples extends StatelessWidget {
           const SizedBox(width: Espace.xs),
           Expanded(
             child: Text(
-              'Le serveur ne sait pas encore enregistrer plusieurs formations. '
-              'Votre saisie reste conservée sur l’appareil, mais '
-              'l’enregistrement peut échouer tant que la correction n’est pas '
-              'déployée.',
+              'Le serveur n’accepte qu’une formation pour l’instant : '
+              'l’enregistrement peut échouer.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSecondaryContainer,
               ),

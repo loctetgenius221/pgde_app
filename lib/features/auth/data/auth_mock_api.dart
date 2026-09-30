@@ -49,7 +49,7 @@ class MockAuthApi implements AuthApi {
   static const String codeDeDemonstration = '123456';
 
   @override
-  Future<void> register({
+  Future<Session> register({
     required String firstname,
     required String lastname,
     required String username,
@@ -75,42 +75,56 @@ class MockAuthApi implements AuthApi {
       );
     }
 
+    final Utilisateur cree = Utilisateur(
+      id: DateTime.now().millisecondsSinceEpoch % 1000000,
+      firstname: firstname,
+      lastname: lastname,
+      username: username,
+      numberid: numberid,
+      email: email,
+      // Le serveur force `enabled: false` : le compte naît inactif (§3.1).
+    );
     _comptes[username.toLowerCase()] = _Compte(
       motDePasse: password,
-      utilisateur: Utilisateur(
-        id: DateTime.now().millisecondsSinceEpoch % 1000000,
-        firstname: firstname,
-        lastname: lastname,
-        username: username,
-        numberid: numberid,
-        email: email,
-        // Le serveur force `enabled = 0` : le compte naît inactif (§3.2).
-      ),
+      utilisateur: cree,
     );
+
+    // §3.1 : un jeton est émis **malgré** le compte désactivé. L'app est
+    // donc authentifiée dès l'inscription, et c'est le routeur qui la retient
+    // sur l'écran de vérification.
+    _connecte = username.toLowerCase();
+    return (token: 'mock|${cree.id}', utilisateur: cree);
   }
 
   @override
   Future<Session> login({
-    required String username,
+    required String identifiant,
     required String password,
   }) async {
     await Future<void>.delayed(_latence);
 
-    final compte = _comptes[username.toLowerCase()];
+    // §3.2 : le même champ accepte l'email ou le nom d'utilisateur.
+    final String cle = identifiant.toLowerCase();
+    final _Compte? compte =
+        _comptes[cle] ??
+        _comptes.values
+            .where((c) => c.utilisateur.email.toLowerCase() == cle)
+            .firstOrNull;
     if (compte == null || compte.motDePasse != password) {
       throw const ApiException(
         'Identifiants incorrects.',
         statusCode: 422,
-        fieldErrors: {
-          'username': ["Nom d'utilisateur ou mot de passe incorrect."],
-        },
+        fieldErrors: {'login': ['Identifiant ou mot de passe incorrect.']},
       );
     }
 
-    // Le serveur laisse passer un compte non vérifié (BUG-02) : l'app reçoit
-    // le jeton et `enabled: false`, puis aiguille vers la vérification (§3.3).
+    // Un compte non vérifié se connecte quand même : l'app reçoit le jeton
+    // et `enabled: false`, puis aiguille vers la vérification (§3.2).
     _connecte = compte.utilisateur.username.toLowerCase();
-    return (token: 'mock|${compte.utilisateur.id}', utilisateur: compte.utilisateur);
+    return (
+      token: 'mock|${compte.utilisateur.id}',
+      utilisateur: compte.utilisateur,
+    );
   }
 
   @override
@@ -181,43 +195,13 @@ class MockAuthApi implements AuthApi {
   }
 
   @override
-  Future<void> demanderReinitialisation({
-    required String email,
-    required String numberid,
-  }) async {
+  Future<void> demanderReinitialisation({required String email}) async {
     await Future<void>.delayed(_latence);
-    // §7.2 : les deux doivent correspondre au **même** compte. Répondre
-    // différemment selon que l'email existe ou non révélerait qui est inscrit.
-    final bool trouve = _comptes.values.any(
-      (c) => c.utilisateur.email == email && c.utilisateur.numberid == numberid,
-    );
-    if (trouve) _jetonsEmis.add(email);
-  }
-
-  @override
-  Future<void> reinitialiser({
-    required String jeton,
-    required String email,
-    required String motDePasse,
-  }) async {
-    await Future<void>.delayed(_latence);
-    if (jeton.trim() != codeDeDemonstration || !_jetonsEmis.contains(email)) {
-      throw const ApiException(
-        'Lien de réinitialisation invalide ou expiré.',
-        statusCode: 422,
-        fieldErrors: <String, List<String>>{
-          'token': <String>['Ce code est invalide ou a expiré.'],
-        },
-      );
+    // §3.5 : la réponse est la même que l'email existe ou non. Distinguer
+    // les deux cas révélerait qui est inscrit sur la plateforme.
+    if (_comptes.values.any((c) => c.utilisateur.email == email)) {
+      _jetonsEmis.add(email);
     }
-    final MapEntry<String, _Compte> entree = _comptes.entries.firstWhere(
-      (e) => e.value.utilisateur.email == email,
-    );
-    _comptes[entree.key] = _Compte(
-      motDePasse: motDePasse,
-      utilisateur: entree.value.utilisateur,
-    );
-    _jetonsEmis.remove(email);
   }
 
   @override

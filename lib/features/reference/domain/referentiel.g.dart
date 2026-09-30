@@ -80,7 +80,7 @@ Map<String, dynamic> _$PaysToJson(_Pays instance) => <String, dynamic>{
 };
 
 _Referentiel _$ReferentielFromJson(Map<String, dynamic> json) => _Referentiel(
-  version: json['version'] as String,
+  version: json['version'] as String? ?? '',
   regions:
       (json['regions'] as List<dynamic>?)
           ?.map((e) => Region.fromJson(e as Map<String, dynamic>))

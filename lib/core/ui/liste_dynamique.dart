@@ -18,6 +18,7 @@ class ListeDynamique<T> extends StatelessWidget {
     required this.contenu,
     required this.libelleAjout,
     this.messageVide,
+    this.onRetirer,
     super.key,
   });
 
@@ -31,15 +32,26 @@ class ListeDynamique<T> extends StatelessWidget {
   final String Function(int index) titre;
 
   /// Champs d'une ligne. [modifier] remplace l'élément à cet index.
-  final Widget Function(T element, ValueChanged<T> modifier) contenu;
+  final Widget Function(int index, T element, ValueChanged<T> modifier)
+  contenu;
 
   final String libelleAjout;
   final String? messageVide;
 
+  /// Prévenu **avant** le retrait de la ligne [index].
+  ///
+  /// Une ligne peut posséder quelque chose qui ne vit pas dans la liste — un
+  /// fichier déjà sur le serveur, par exemple. Sans ce préavis, l'élément
+  /// aurait disparu avant qu'on puisse savoir ce qu'il emportait.
+  final void Function(int index)? onRetirer;
+
   void _remplacer(int index, T valeur) =>
       onChange(<T>[...elements]..[index] = valeur);
 
-  void _retirer(int index) => onChange(<T>[...elements]..removeAt(index));
+  void _retirer(int index) {
+    onRetirer?.call(index);
+    onChange(<T>[...elements]..removeAt(index));
+  }
 
   void _ajouter() => onChange(<T>[...elements, nouveau()]);
 
@@ -83,7 +95,7 @@ class ListeDynamique<T> extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: Espace.xs),
-                  contenu(elements[i], (valeur) => _remplacer(i, valeur)),
+                  contenu(i, elements[i], (valeur) => _remplacer(i, valeur)),
                 ],
               ),
             ),

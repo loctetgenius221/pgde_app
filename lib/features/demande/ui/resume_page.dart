@@ -56,7 +56,8 @@ class _Contenu extends StatelessWidget {
   final Demande demande;
   final Referentiel referentiel;
 
-  String _region(int? id) => _libelle(referentiel.regions, id, (r) => r.id, (r) => r.libelle);
+  String _region(int? id) =>
+      _libelle(referentiel.regions, id, (r) => r.id, (r) => r.libelle);
   String _departement(int? id) =>
       _libelle(referentiel.departements, id, (d) => d.id, (d) => d.libelle);
   String _pays(int? id) =>
@@ -132,7 +133,8 @@ class _Contenu extends StatelessWidget {
                   ),
                   ('Lieu de résidence', demande.lieuResidence),
                   ('Région de résidence', _region(demande.regionResidenceId)),
-                  if (demande.resideHorsSenegal)
+                  if (demande.resideHorsSenegal &&
+                      referentiel.countries.isNotEmpty)
                     ('Pays de résidence', _pays(demande.paysId))
                   else
                     (
@@ -251,11 +253,13 @@ class _Section extends StatelessWidget {
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: Text(etape.titre, style: theme.textTheme.titleMedium),
+                    child: Text(
+                      etape.titre,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
                   TextButton.icon(
-                    onPressed: () =>
-                        context.push(Routes.wizardEtape(etape)),
+                    onPressed: () => context.push(Routes.wizardEtape(etape)),
                     icon: const Icone(Icones.modifier, taille: 18),
                     label: const Text('Modifier'),
                   ),
@@ -312,12 +316,15 @@ class _Pieces extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final List<(TypeFichier, FichierJoint)> pieces =
-        <(TypeFichier, FichierJoint)>[
-          for (final TypeFichier type in TypeFichier.values)
-            for (final FichierJoint piece in demande.fichiersDe(type))
-              (type, piece),
-        ];
+    // Chaque justificatif est annoncé par la formation qu'il prouve : c'est
+    // l'écran de vérification, et le rattachement est précisément ce qu'il y
+    // a à vérifier.
+    final List<(String, FichierJoint)> pieces = <(String, FichierJoint)>[
+      for (int i = 0; i < demande.formations.length; i++)
+        if (demande.formations[i].justificatif case final FichierJoint p)
+          ('Formation ${i + 1}', p),
+      for (final FichierJoint p in demande.cv) (TypeFichier.cv.libelle, p),
+    ];
     if (pieces.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -325,17 +332,21 @@ class _Pieces extends StatelessWidget {
       children: <Widget>[
         const Divider(height: Espace.lg),
         Text('Pièces jointes', style: theme.textTheme.bodySmall),
-        for (final (TypeFichier type, FichierJoint piece) in pieces)
+        for (final (String origine, FichierJoint piece) in pieces)
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icone(
               Icones.document,
               couleur: theme.colorScheme.onSurfaceVariant,
             ),
-            title: Text(piece.nomAffiche, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text(
+              piece.nomAffiche,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             subtitle: Text(
               <String>[
-                type.libelle,
+                origine,
                 piece.tailleLisible,
               ].where((t) => t.isNotEmpty).join(' · '),
             ),

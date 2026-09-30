@@ -51,8 +51,7 @@ abstract final class Telephone {
       return 'Un numéro sénégalais compte 9 chiffres (ex. 77 123 45 67).';
     }
     if (!_prefixesSenegal.contains(chiffres.substring(0, 2))) {
-      return 'Préfixe inconnu. Les numéros commencent par 70, 75, 76, 77, 78 '
-          'ou 33.';
+      return 'Préfixe inconnu (70, 75, 76, 77, 78 ou 33).';
     }
     return null;
   }

@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/ui/async_view.dart';
+import '../../../core/ui/frise_etapes.dart';
 import '../../../core/ui/icone.dart';
+import '../../../core/ui/pied_institutionnel.dart';
 import '../../../core/ui/responsive.dart';
+import '../../assistant/ui/entree_assistant.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/utilisateur.dart';
 import '../application/demande_controller.dart';
@@ -31,40 +34,104 @@ class AccueilPage extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: AsyncView<Demande>(
-          value: dossier,
-          onRetry: () => ref.invalidate(demandeControllerProvider),
-          builder: (demande) => ListView(
-            padding: const EdgeInsets.only(bottom: Espace.xxl),
-            children: <Widget>[
-              ConteneurPage(
-                largeurMax: LargeurMax.contenu,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    _EnTete(utilisateur: utilisateur, ref: ref),
-                    const SizedBox(height: Espace.lg),
-                    _CarteDossier(demande: demande),
-                    const SizedBox(height: Espace.xl),
-                    Text(
-                      'Les étapes de votre dossier',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: Espace.sm),
-                    for (final EtapeWizard etape in EtapeWizard.values) ...[
-                      _CarteEtape(
-                        etape: etape,
-                        complete: demande.estComplete(etape),
-                        onTap: () => context.push(Routes.wizardEtape(etape)),
-                      ),
-                      const SizedBox(height: Espace.xs),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
+        // Ndimbal flotte par-dessus le contenu plutôt que d'y prendre place :
+        // l'aide doit rester à portée où que le candidat ait fait défiler.
+        child: Stack(
+          children: <Widget>[
+            _Contenu(utilisateur: utilisateur, dossier: dossier, ref: ref),
+            // Remonté au-dessus de la signature, qui occupe désormais le
+            // bas de l'écran : posés à la même hauteur, les deux se
+            // chevauchaient.
+            const Positioned(
+              right: Espace.sm,
+              bottom: Espace.xxl + Espace.sm,
+              child: EntreeAssistant(),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _Contenu extends StatelessWidget {
+  const _Contenu({
+    required this.utilisateur,
+    required this.dossier,
+    required this.ref,
+  });
+
+  final Utilisateur? utilisateur;
+  final AsyncValue<Demande> dossier;
+  final WidgetRef ref;
+
+  @override
+  Widget build(BuildContext context) {
+    return AsyncView<Demande>(
+      value: dossier,
+      onRetry: () => ref.invalidate(demandeControllerProvider),
+      // `CustomScrollView` et non `ListView` : la signature doit tomber
+      // au bas de l'écran quand le contenu ne le remplit pas, et se
+      // laisser pousser vers le bas quand il déborde. C'est exactement ce
+      // que fait `SliverFillRemaining` — il occupe la place restante s'il
+      // y en a, et se réduit à la hauteur de son enfant s'il n'y en a
+      // plus. Une simple marge basse aurait figé le pied de page à une
+      // distance fixe, juste sur l'écran qui a servi à la régler.
+      builder: (demande) => CustomScrollView(
+        slivers: <Widget>[
+          SliverToBoxAdapter(
+            child: ConteneurPage(
+              largeurMax: LargeurMax.contenu,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _EnTete(utilisateur: utilisateur, ref: ref),
+                  const SizedBox(height: Espace.lg),
+                  _CarteDossier(demande: demande),
+                  const SizedBox(height: Espace.xl),
+                  Text(
+                    'Les étapes de votre dossier',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: Espace.md),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(Espace.md),
+                      child: FriseEtapes(
+                        elements: <ElementFrise>[
+                          for (final EtapeWizard etape in EtapeWizard.values)
+                            ElementFrise(
+                              numero: etape.numero,
+                              titre: etape.titre,
+                              etat: _etatDe(demande, etape),
+                              statut: _statutDe(demande, etape),
+                              onTap: () =>
+                                  context.push(Routes.wizardEtape(etape)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Signature institutionnelle, collée au bas de l'écran.
+          // Réduite au seul nom du ministère : le logo et le nom de la
+          // plateforme sont déjà portés par l'écran d'ouverture, les
+          // répéter ici alourdissait la fin de page sans rien apprendre.
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: EdgeInsets.only(top: Espace.xxl, bottom: Espace.md),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: PiedInstitutionnel(avecPlateforme: false),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -176,15 +243,26 @@ class _CarteDossier extends StatelessWidget {
             Row(
               children: <Widget>[
                 Container(
-                  padding: const EdgeInsets.all(Espace.sm),
+                  // Le bloc garde la même emprise dans les deux états : seul
+                  // son contenu change, pas le rythme de la carte.
+                  padding: EdgeInsets.all(depose ? Espace.sm : Espace.xs),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(Rayon.sm),
                   ),
-                  child: Icone(
-                    depose ? Icones.dossier : Icones.nouveauDossier,
-                    couleur: theme.colorScheme.onPrimaryContainer,
-                  ),
+                  child: depose
+                      ? Icone(
+                          Icones.dossier,
+                          couleur: theme.colorScheme.onPrimaryContainer,
+                        )
+                      // L'illustration porte ses propres couleurs : on ne la
+                      // teinte pas, et on lui laisse un peu plus de place
+                      // qu'à un trait d'icône, qui se lit de plus loin.
+                      : Image.asset(
+                          'assets/icone-demande-d-emploi.png',
+                          width: 30,
+                          height: 30,
+                        ),
                 ),
                 const SizedBox(width: Espace.sm),
                 Expanded(
@@ -198,10 +276,8 @@ class _CarteDossier extends StatelessWidget {
             const SizedBox(height: Espace.sm),
             Text(
               depose
-                  ? 'Vous pouvez le compléter ou le corriger à tout moment. '
-                        'Vos modifications remplacent la version précédente.'
-                  : 'Déposez votre demande d’emploi en quatre étapes. Vous '
-                        'pourrez la modifier autant de fois que nécessaire.',
+                  ? 'Modifiable à tout moment.'
+                  : 'Quatre étapes, modifiables à tout moment.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: Espace.md),
@@ -246,70 +322,22 @@ class _CarteDossier extends StatelessWidget {
   }
 }
 
-class _CarteEtape extends StatelessWidget {
-  const _CarteEtape({
-    required this.etape,
-    required this.complete,
-    required this.onTap,
-  });
+enum _ActionCompte { motDePasse, deconnexion }
 
-  final EtapeWizard etape;
-  final bool complete;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Rayon.lg),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Espace.md,
-            vertical: Espace.sm,
-          ),
-          child: Row(
-            children: <Widget>[
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: complete
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.surfaceContainerHighest,
-                child: complete
-                    ? Icone(
-                        Icones.valide,
-                        taille: 18,
-                        couleur: theme.colorScheme.onPrimary,
-                      )
-                    : Text(
-                        '${etape.numero}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-              ),
-              const SizedBox(width: Espace.sm),
-              Expanded(
-                child: Text(etape.titre, style: theme.textTheme.bodyLarge),
-              ),
-              Text(
-                complete ? 'Complétée' : 'À remplir',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(width: Espace.xxs),
-              Icone(
-                Icones.suivant,
-                taille: 18,
-                couleur: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+/// Une seule étape est « en cours » : la première non complétée (§7.6,
+/// `completion.etape_courante`). Les suivantes restent à venir, même si une
+/// étape plus loin se trouve déjà remplie — on décrit un chemin, pas un
+/// tableau de bord.
+EtatEtape _etatDe(Demande demande, EtapeWizard etape) {
+  if (demande.estComplete(etape)) return EtatEtape.franchie;
+  return etape == demande.etapeCourante ? EtatEtape.enCours : EtatEtape.aVenir;
 }
 
-enum _ActionCompte { motDePasse, deconnexion }
+String? _statutDe(Demande demande, EtapeWizard etape) =>
+    switch (_etatDe(demande, etape)) {
+      EtatEtape.franchie => 'Complétée',
+      EtatEtape.enCours => 'À remplir',
+      // Rien pour une étape à venir : « À faire » n'apprendrait rien de plus
+      // que sa position dans la frise.
+      EtatEtape.aVenir => null,
+    };

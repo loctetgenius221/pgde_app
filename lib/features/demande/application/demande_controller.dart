@@ -51,10 +51,16 @@ class DemandeController extends AsyncNotifier<Demande> {
     );
   }
 
-  /// Envoie **l'intégralité** du dossier au serveur, puis purge le brouillon.
+  /// Envoie le dossier au serveur, étape par étape, puis purge le brouillon.
+  ///
+  /// Le contrat découpe l'écriture en quatre `PUT` (§5.2 à §5.5). On les
+  /// enchaîne dans l'ordre du formulaire : si l'un échoue, les précédents
+  /// sont déjà enregistrés et le candidat ne perd que ce qui n'est pas
+  /// passé. C'est l'inverse exact de l'ancien envoi global, où un seul champ
+  /// refusé renvoyait tout le dossier à l'expéditeur.
   ///
   /// Les erreurs remontent à l'appelant : c'est l'écran qui sait sur quelle
-  /// étape renvoyer l'utilisateur en cas de 422 (§8.7).
+  /// étape renvoyer l'utilisateur en cas de 422.
   Future<void> enregistrer() async {
     final Demande? actuel = state.value;
     if (actuel == null) return;
@@ -62,61 +68,71 @@ class DemandeController extends AsyncNotifier<Demande> {
     _sauvegarde?.cancel();
     final DemandeApi api = ref.read(demandeApiProvider);
 
-    final Demande enregistre = actuel.existeSurLeServeur
-        ? await api.mettreAJour(actuel)
-        : await api.creer(actuel);
+    await api.enregistrerIdentite(actuel);
+    await api.enregistrerFormations(actuel);
+    await api.enregistrerExperiences(actuel);
+    await api.enregistrerVoeux(actuel);
 
-    // Le formulaire est sauvé : on le publie et on purge le brouillon avant
-    // de toucher aux pièces. Si un fichier est refusé ensuite, l'utilisateur
-    // ne doit pas croire que sa saisie est perdue.
+    // Le formulaire est sauvé : on purge le brouillon avant de toucher aux
+    // pièces. Si un fichier est refusé ensuite, l'utilisateur ne doit pas
+    // croire que sa saisie est perdue.
     await ref.read(brouillonStoreProvider).purger();
-    state = AsyncData(enregistre);
+    state = AsyncData(actuel.copyWith(deposee: true));
 
-    state = AsyncData(await _deposerLesPiecesEnAttente(enregistre));
+    await _deposerLesPiecesEnAttente();
+
+    // Le serveur fait foi une fois tout envoyé : les justificatifs y ont pris
+    // leur chemin définitif, que seul `GET /candidat/profile` connaît.
+    final Demande? serveur = await api.mien();
+    if (serveur != null) state = AsyncData(serveur);
   }
 
-  /// Dépose les pièces mises en file. Elles ne peuvent partir qu'après la
-  /// création du dossier : les endpoints du §7.5 s'attachent à une `userdata`
-  /// existante.
-  Future<Demande> _deposerLesPiecesEnAttente(Demande dossier) async {
+  /// Dépose les pièces mises en file (§6).
+  ///
+  /// Elles ne peuvent partir qu'**après** l'enregistrement des formations :
+  /// `formation_index` désigne un rang que le serveur doit déjà connaître.
+  Future<void> _deposerLesPiecesEnAttente() async {
     final PiecesEnAttente file = ref.read(piecesEnAttenteProvider);
-    if (file.estVide) return dossier;
+    if (file.estVide) return;
 
     final DemandeApi api = ref.read(demandeApiProvider);
-    Demande courant = dossier;
 
     final File? photo = file.photo;
-    if (photo != null) courant = await api.deposerPhoto(photo);
+    if (photo != null) {
+      final FichierJoint piece = await api.deposerPhoto(photo);
+      modifier((d) => d.copyWith(photo: piece));
+    }
 
-    for (final TypeFichier type in TypeFichier.values) {
-      final List<File> fichiers = file.de(type);
-      if (fichiers.isEmpty) continue;
-      courant = await api.deposerDocuments(type: type, fichiers: fichiers);
+    // Dans l'ordre des formations, pour que les rangs envoyés correspondent
+    // à ceux que le serveur vient d'enregistrer.
+    final List<int> rangs = file.justificatifs.keys.toList()..sort();
+    for (final int rang in rangs) {
+      final FichierJoint piece = await api.deposerDiplome(
+        fichier: file.justificatifs[rang]!,
+        formationIndex: rang,
+      );
+      modifier((d) => d.avecJustificatif(rang, piece));
     }
 
     ref.read(piecesEnAttenteProvider.notifier).vider();
-    return courant;
   }
 
-  /// Retire une pièce déjà déposée sur le serveur.
+  /// Retire le justificatif d'une formation.
   ///
-  /// La réponse porte l'état **serveur** du dossier : l'adopter en entier
-  /// écraserait les modifications du formulaire pas encore enregistrées. On
-  /// n'en reprend donc que la liste des pièces.
-  Future<void> retirerPiece(TypeFichier type, String chemin) async {
-    final Demande retour = await ref
-        .read(demandeApiProvider)
-        .supprimerFichier(type: type, chemin: chemin);
-    modifier((d) => d.avecFichiers(type, retour.fichiersDe(type)));
+  /// Le contrat §6 n'expose **aucune suppression de justificatif** : seul le
+  /// CV peut être retiré côté serveur. On détache donc la pièce de la
+  /// formation et on laisse le prochain `PUT /candidat/formations` la
+  /// remplacer — l'absence d'`existing_diplome_file` vaut abandon.
+  Future<void> retirerJustificatif(int rang) async {
+    modifier((d) => d.avecJustificatif(rang, null));
   }
 
-  /// Remplace la photo d'un dossier déjà enregistré (§3.1, « Changer la
-  /// photo »).
+  /// Remplace la photo d'un dossier déjà enregistré (§6.1).
   Future<void> remplacerPhoto(File fichier) async {
-    final Demande retour = await ref
+    final FichierJoint piece = await ref
         .read(demandeApiProvider)
         .deposerPhoto(fichier);
-    modifier((d) => d.copyWith(photo: retour.photo));
+    modifier((d) => d.copyWith(photo: piece));
   }
 
   /// Abandonne les modifications locales et repart de l'état serveur.

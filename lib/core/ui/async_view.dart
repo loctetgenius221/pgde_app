@@ -26,7 +26,8 @@ class AsyncView<T> extends StatelessWidget {
   Widget build(BuildContext context) => value.when(
     data: builder,
     loading: () => const Center(child: CircularProgressIndicator()),
-    error: (error, _) => _VueErreur(message: messageOf(error), onRetry: onRetry),
+    error: (error, _) =>
+        _VueErreur(message: messageOf(error), onRetry: onRetry),
   );
 }
 

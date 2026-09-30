@@ -64,8 +64,8 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
     if (!succes || !mounted) return;
     _annoncer(
       Env.useMocks
-          ? 'Code envoyé. En démonstration, saisissez 123456.'
-          : 'Un nouveau code vous a été envoyé.',
+          ? 'Code envoyé. En démonstration : 123456.'
+          : 'Nouveau code envoyé.',
     );
   }
 
@@ -120,8 +120,7 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
                   ),
                   const SizedBox(height: Espace.sm),
                   Text(
-                    'Un code à six chiffres a été envoyé à '
-                    '${utilisateur?.email ?? 'votre adresse'}.',
+                    'Code envoyé à ${utilisateur?.email ?? 'votre adresse'}.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -167,7 +166,7 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
                   const SizedBox(height: Espace.xs),
                   TextButton(
                     onPressed: envoiEnCours ? null : _actualiser,
-                    child: const Text('J’ai activé depuis le lien reçu'),
+                    child: const Text('J’ai utilisé le lien reçu'),
                   ),
                 ],
               ),

@@ -28,6 +28,9 @@ _Formation _$FormationFromJson(Map<String, dynamic> json) => _Formation(
   anneeDiplome: (json['anneeDiplome'] as num?)?.toInt(),
   specialite: json['specialite'] as String? ?? '',
   etablissement: json['etablissement'] as String? ?? '',
+  justificatif: json['justificatif'] == null
+      ? null
+      : FichierJoint.fromJson(json['justificatif'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$FormationToJson(_Formation instance) =>
@@ -37,6 +40,7 @@ Map<String, dynamic> _$FormationToJson(_Formation instance) =>
       'anneeDiplome': instance.anneeDiplome,
       'specialite': instance.specialite,
       'etablissement': instance.etablissement,
+      'justificatif': instance.justificatif?.toJson(),
     };
 
 _Experience _$ExperienceFromJson(Map<String, dynamic> json) => _Experience(
@@ -55,7 +59,7 @@ Map<String, dynamic> _$ExperienceToJson(_Experience instance) =>
     };
 
 _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
-  id: (json['id'] as num?)?.toInt(),
+  deposee: json['deposee'] as bool? ?? false,
   dateNaissance: const DateOnlyConverter().fromJson(
     json['dateNaissance'] as String?,
   ),
@@ -75,17 +79,13 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
   departementNaissanceId: (json['departementNaissanceId'] as num?)?.toInt(),
   regionResidenceId: (json['regionResidenceId'] as num?)?.toInt(),
   departementResidenceId: (json['departementResidenceId'] as num?)?.toInt(),
+  aUnHandicap: json['aUnHandicap'] as bool? ?? false,
   handicapId: (json['handicapId'] as num?)?.toInt(),
   formations:
       (json['formations'] as List<dynamic>?)
           ?.map((e) => Formation.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const <Formation>[],
-  diplomes:
-      (json['diplomes'] as List<dynamic>?)
-          ?.map((e) => FichierJoint.fromJson(e as Map<String, dynamic>))
-          .toList() ??
-      const <FichierJoint>[],
   cv:
       (json['cv'] as List<dynamic>?)
           ?.map((e) => FichierJoint.fromJson(e as Map<String, dynamic>))
@@ -94,7 +94,7 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
   photo: json['photo'] == null
       ? null
       : FichierJoint.fromJson(json['photo'] as Map<String, dynamic>),
-  aDeLExperience: json['aDeLExperience'] as bool? ?? false,
+  aDeLExperience: json['aDeLExperience'] as bool?,
   experiences:
       (json['experiences'] as List<dynamic>?)
           ?.map((e) => Experience.fromJson(e as Map<String, dynamic>))
@@ -108,7 +108,7 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
 );
 
 Map<String, dynamic> _$DemandeToJson(_Demande instance) => <String, dynamic>{
-  'id': instance.id,
+  'deposee': instance.deposee,
   'dateNaissance': const DateOnlyConverter().toJson(instance.dateNaissance),
   'lieuNaissance': instance.lieuNaissance,
   'lieuResidence': instance.lieuResidence,
@@ -124,9 +124,9 @@ Map<String, dynamic> _$DemandeToJson(_Demande instance) => <String, dynamic>{
   'departementNaissanceId': instance.departementNaissanceId,
   'regionResidenceId': instance.regionResidenceId,
   'departementResidenceId': instance.departementResidenceId,
+  'aUnHandicap': instance.aUnHandicap,
   'handicapId': instance.handicapId,
   'formations': instance.formations.map((e) => e.toJson()).toList(),
-  'diplomes': instance.diplomes.map((e) => e.toJson()).toList(),
   'cv': instance.cv.map((e) => e.toJson()).toList(),
   'photo': instance.photo?.toJson(),
   'aDeLExperience': instance.aDeLExperience,

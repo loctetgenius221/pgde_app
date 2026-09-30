@@ -30,24 +30,22 @@ enum SituationMatrimoniale {
   final String wire;
 }
 
-/// Nature d'une pièce jointe — elle décide de l'endpoint et des formats admis.
+/// Nature d'une pièce jointe — elle décide de la route, des formats admis et
+/// du plafond de taille (contrat §6).
 enum TypeFichier {
-  diplome('diplome', 'Diplôme'),
-  cv('cv', 'CV');
+  photo('Photo de profil'),
+  diplome('Diplôme'),
 
-  const TypeFichier(this.wire, this.libelle);
+  /// §6.2 en prévoit le téléversement, mais le **CV est retiré de la saisie** :
+  /// il doit être produit par le serveur à partir du dossier, qui contient
+  /// déjà tout. Le type et la route restent en place — la lecture d'un CV
+  /// déposé auparavant continue de fonctionner — pour que le rétablir ne
+  /// coûte qu'un écran.
+  cv('CV');
 
-  final String wire;
+  const TypeFichier(this.libelle);
+
   final String libelle;
-
-  /// Types réellement proposés à la saisie aujourd'hui.
-  ///
-  /// §4 en prévoit deux, mais le **CV est retiré du formulaire** : il doit
-  /// être produit par le serveur à partir des informations du dossier, qui les
-  /// contient toutes. Le type et les appels restent en place — la lecture d'un
-  /// CV déposé auparavant continue de fonctionner — pour que le rétablir ne
-  /// coûte qu'une ligne.
-  static const List<TypeFichier> proposes = <TypeFichier>[TypeFichier.diplome];
 }
 
 /// Un fichier déposé sur le serveur (§7.6, bloc `fichiers`).
@@ -90,7 +88,7 @@ abstract class FichierJoint with _$FichierJoint {
   }
 }
 
-/// Une ligne de la liste dynamique « formations » (§4, étape 2).
+/// Une ligne de la liste dynamique « formations » (contrat §5.3).
 @freezed
 abstract class Formation with _$Formation {
   const factory Formation({
@@ -99,6 +97,14 @@ abstract class Formation with _$Formation {
     int? anneeDiplome,
     @Default('') String specialite,
     @Default('') String etablissement,
+
+    /// Justificatif de **cette** formation.
+    ///
+    /// Le contrat le porte à deux endroits : `diplome_file_url` dans la
+    /// lecture du profil (§5.1) et `formation_index` au téléversement
+    /// (§6.4). Le lien formation ↔ document est donc enfin tenu par le
+    /// serveur, et non plus reconstitué côté app.
+    FichierJoint? justificatif,
   }) = _Formation;
 
   const Formation._();
@@ -108,7 +114,7 @@ abstract class Formation with _$Formation {
 
   /// « Sans diplôme » masque intitulé, année, spécialité et établissement
   /// (§8.9).
-  bool get sansDiplome => academicId == Academic.sansDiplomeId;
+  bool get sansDiplome => Academic.estSansDiplome(academicId);
 }
 
 /// Une ligne de la liste dynamique « expériences » (§4, étape 3).
@@ -153,7 +159,13 @@ abstract class Experience with _$Experience {
 @freezed
 abstract class Demande with _$Demande {
   const factory Demande({
-    int? id,
+    /// Vrai si le serveur détient déjà une fiche `userdata`.
+    ///
+    /// Les quatre endpoints d'écriture sont des `PUT` idempotents : il n'y a
+    /// plus de création à distinguer d'une mise à jour. Ce drapeau ne sert
+    /// donc qu'à l'affichage — « dossier enregistré » plutôt que « demande
+    /// en préparation ».
+    @Default(false) bool deposee,
 
     // --- Étape 1 : identité et résidence ---
     @DateOnlyConverter() DateTime? dateNaissance,
@@ -170,20 +182,30 @@ abstract class Demande with _$Demande {
     int? departementNaissanceId,
     int? regionResidenceId,
     int? departementResidenceId,
+    // §4 distingue **deux** champs : `handicap` (« 0 » ou « 1 ») et
+    // `handicap_id`. Les fondre en un seul rendait « Oui » inexprimable tant
+    // qu'aucun type n'était choisi — et donc intapable.
+    @Default(false) bool aUnHandicap,
     int? handicapId,
 
-    // --- Étape 2 : formations et pièces jointes ---
+    // --- Étape 2 : formations et justificatifs ---
+    //
+    // Chaque formation porte le sien (§5.1, §6.4). Il n'y a plus de tableau
+    // global de diplômes : c'était l'aveu d'un serveur incapable de dire
+    // quel document prouvait quelle formation.
     @Default(<Formation>[]) List<Formation> formations,
 
     // Les pièces vivent sur le serveur, déposées par des appels dédiés
-    // (§7.5). Elles ne partent donc **pas** dans le corps du formulaire : on
+    // (§6). Elles ne partent donc **pas** dans le corps du formulaire : on
     // les garde ici pour l'affichage et la suppression.
-    @Default(<FichierJoint>[]) List<FichierJoint> diplomes,
     @Default(<FichierJoint>[]) List<FichierJoint> cv,
     FichierJoint? photo,
 
     // --- Étape 3 : expériences ---
-    @Default(false) bool aDeLExperience,
+    // `null` tant que le candidat n'a pas répondu. Un booléen par défaut
+    // faisait passer l'étape pour complétée avant même qu'il l'ait ouverte :
+    // le dossier affichait une réponse que personne n'avait donnée.
+    bool? aDeLExperience,
     @Default(<Experience>[]) List<Experience> experiences,
 
     // --- Étape 4 : vœux ---
@@ -196,21 +218,27 @@ abstract class Demande with _$Demande {
 
   const Demande._();
 
-  factory Demande.fromJson(Map<String, dynamic> json) => _$DemandeFromJson(json);
+  factory Demande.fromJson(Map<String, dynamic> json) =>
+      _$DemandeFromJson(json);
 
-  bool get existeSurLeServeur => id != null;
+  bool get existeSurLeServeur => deposee;
 
   /// Expériences telles que le serveur les conservera (§4, étape 3).
-  List<Experience> get experiencesRetenues =>
-      aDeLExperience ? experiences.where((e) => e.estSignificative).toList() : const [];
+  List<Experience> get experiencesRetenues => aDeLExperience == true
+      ? experiences.where((e) => e.estSignificative).toList()
+      : const [];
 
-  List<FichierJoint> fichiersDe(TypeFichier type) =>
-      type == TypeFichier.diplome ? diplomes : cv;
+  /// Justificatif de la formation [rang], s'il y en a un.
+  FichierJoint? justificatifDe(int rang) =>
+      rang < formations.length ? formations[rang].justificatif : null;
 
-  Demande avecFichiers(TypeFichier type, List<FichierJoint> fichiers) =>
-      type == TypeFichier.diplome
-      ? copyWith(diplomes: fichiers)
-      : copyWith(cv: fichiers);
+  /// Rattache un justificatif à la formation [rang].
+  Demande avecJustificatif(int rang, FichierJoint? piece) {
+    if (rang >= formations.length) return this;
+    final List<Formation> suivantes = <Formation>[...formations];
+    suivantes[rang] = suivantes[rang].copyWith(justificatif: piece);
+    return copyWith(formations: suivantes);
+  }
 
   /// §5.1 — hors Sénégal : on demande le pays et on masque le département.
   bool get resideHorsSenegal => regionResidenceId == Region.horsSenegalId;
@@ -227,13 +255,31 @@ abstract class Demande with _$Demande {
     // Aucun champ obligatoire côté serveur, mais un dossier sans formation
     // n'a pas de sens : on le signale sans bloquer.
     EtapeWizard.formations => formations.isNotEmpty,
-    EtapeWizard.experiences => !aDeLExperience || experiencesRetenues.isNotEmpty,
+    // Sans réponse, l'étape reste à remplir : « non » est une réponse,
+    // pas une absence de réponse.
+    EtapeWizard.experiences => switch (aDeLExperience) {
+      null => false,
+      false => true,
+      true => experiencesRetenues.isNotEmpty,
+    },
     EtapeWizard.voeux =>
       emploi1Id != null && emploi2Id != null && emploi1Id != emploi2Id,
   };
 
   List<EtapeWizard> get etapesCompletes =>
       EtapeWizard.values.where(estComplete).toList();
+
+  /// Première étape non complétée — celle que le candidat doit reprendre.
+  ///
+  /// `null` quand tout est rempli. C'est l'équivalent de
+  /// `completion.etape_courante` du §7.6, calculé côté app tant que l'API
+  /// n'existe pas.
+  EtapeWizard? get etapeCourante {
+    for (final EtapeWizard etape in EtapeWizard.values) {
+      if (!estComplete(etape)) return etape;
+    }
+    return null;
+  }
 
   double get progression => etapesCompletes.length / EtapeWizard.values.length;
 

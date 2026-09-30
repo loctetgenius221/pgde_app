@@ -24,11 +24,7 @@ class _MotDePassePageState extends ConsumerState<MotDePassePage>
 
   @override
   void dispose() {
-    for (final c in <TextEditingController>[
-      _actuel,
-      _nouveau,
-      _confirmation,
-    ]) {
+    for (final c in <TextEditingController>[_actuel, _nouveau, _confirmation]) {
       c.dispose();
     }
     super.dispose();
@@ -40,17 +36,14 @@ class _MotDePassePageState extends ConsumerState<MotDePassePage>
     final bool succes = await soumettre(
       () => ref
           .read(authControllerProvider.notifier)
-          .changerMotDePasse(
-            actuel: _actuel.text,
-            nouveau: _nouveau.text,
-          ),
+          .changerMotDePasse(actuel: _actuel.text, nouveau: _nouveau.text),
     );
     if (!succes || !mounted) return;
 
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Votre mot de passe a été modifié.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Mot de passe modifié.')));
   }
 
   @override
@@ -71,11 +64,6 @@ class _MotDePassePageState extends ConsumerState<MotDePassePage>
                   Text(
                     'Changer votre mot de passe',
                     style: theme.textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: Espace.xs),
-                  Text(
-                    'Vous resterez connecté sur cet appareil.',
-                    style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: Espace.xl),
 
@@ -103,8 +91,9 @@ class _MotDePassePageState extends ConsumerState<MotDePassePage>
                       prefixIcon: const PrefixeChamp(Icones.motDePasse),
                       errorText: erreurDuChamp('new_password'),
                     ),
-                    validator: (v) =>
-                        (v == null || v.length < 8) ? 'Au moins 8 caractères' : null,
+                    validator: (v) => (v == null || v.length < 8)
+                        ? 'Au moins 8 caractères'
+                        : null,
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(

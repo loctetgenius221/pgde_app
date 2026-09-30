@@ -39,17 +39,21 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     }
   }
 
+  /// [identifiant] vaut l'email **ou** le nom d'utilisateur : le serveur
+  /// accepte les deux sur le même champ (contrat §3.2).
   Future<void> connexion({
-    required String username,
+    required String identifiant,
     required String password,
   }) async {
     final session = await ref
         .read(authApiProvider)
-        .login(username: username, password: password);
-    await ref.read(tokenStoreProvider).write(session.token);
-    state = AsyncData(session.utilisateur);
+        .login(identifiant: identifiant, password: password);
+    await _ouvrir(session);
   }
 
+  /// L'inscription authentifie déjà (§3.1) : le serveur émet un jeton avec le
+  /// compte, encore désactivé. On ouvre donc la session tout de suite — le
+  /// routeur se charge de retenir l'utilisateur sur l'écran de vérification.
   Future<void> inscription({
     required String firstname,
     required String lastname,
@@ -57,14 +61,24 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     required String numberid,
     required String email,
     required String password,
-  }) => ref.read(authApiProvider).register(
-    firstname: firstname,
-    lastname: lastname,
-    username: username,
-    numberid: numberid,
-    email: email,
-    password: password,
-  );
+  }) async {
+    final session = await ref
+        .read(authApiProvider)
+        .register(
+          firstname: firstname,
+          lastname: lastname,
+          username: username,
+          numberid: numberid,
+          email: email,
+          password: password,
+        );
+    await _ouvrir(session);
+  }
+
+  Future<void> _ouvrir(Session session) async {
+    await ref.read(tokenStoreProvider).write(session.token);
+    state = AsyncData(session.utilisateur);
+  }
 
   Future<void> deconnexion() async {
     try {
@@ -95,20 +109,11 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
       .read(authApiProvider)
       .changerMotDePasse(actuel: actuel, nouveau: nouveau);
 
-  Future<void> demanderReinitialisation({
-    required String email,
-    required String numberid,
-  }) => ref
-      .read(authApiProvider)
-      .demanderReinitialisation(email: email, numberid: numberid);
-
-  Future<void> reinitialiser({
-    required String jeton,
-    required String email,
-    required String motDePasse,
-  }) => ref
-      .read(authApiProvider)
-      .reinitialiser(jeton: jeton, email: email, motDePasse: motDePasse);
+  /// §3.5 — l'email seul : le serveur envoie le lien de réinitialisation.
+  /// La suite se passe hors de l'app, la v1 n'exposant pas de route pour
+  /// consommer le jeton reçu.
+  Future<void> demanderReinitialisation({required String email}) =>
+      ref.read(authApiProvider).demanderReinitialisation(email: email);
 
   /// Recharge le profil, par exemple après validation de l'email.
   Future<void> rafraichir() async {

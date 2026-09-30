@@ -46,25 +46,25 @@ class EtapeExperiences extends StatelessWidget {
           onChange: (oui) => modifier((d) => d.copyWith(aDeLExperience: oui)),
         ),
 
-        if (!demande.aDeLExperience)
+        if (demande.aDeLExperience == false)
           Padding(
             padding: const EdgeInsets.only(top: Espace.md),
             child: Text(
-              'Aucune expérience ne sera enregistrée. Ce n’est pas un frein : '
-              'de nombreux postes sont ouverts aux débutants.',
+              'De nombreux postes sont ouverts aux débutants.',
               style: theme.textTheme.bodyMedium,
             ),
           )
-        else ...<Widget>[
+        else if (demande.aDeLExperience == true) ...<Widget>[
           const TitreSection('Vos expériences'),
           ListeDynamique<Experience>(
             elements: demande.experiences,
             libelleAjout: 'Ajouter une expérience',
-            messageVide: 'Aucune expérience enregistrée pour le moment.',
+            messageVide: 'Aucune expérience.',
             nouveau: Experience.new,
             titre: (i) => 'Expérience ${i + 1}',
-            onChange: (liste) => modifier((d) => d.copyWith(experiences: liste)),
-            contenu: (experience, remplacer) =>
+            onChange: (liste) =>
+                modifier((d) => d.copyWith(experiences: liste)),
+            contenu: (_, experience, remplacer) =>
                 _ChampsExperience(experience: experience, onChange: remplacer),
           ),
 
@@ -77,10 +77,9 @@ class EtapeExperiences extends StatelessWidget {
               child: Text(
                 saisies - retenues == 1
                     ? 'Une expérience sera ignorée : renseignez au moins le '
-                          'poste, l’employeur ou la description.'
+                          'poste ou l’employeur.'
                     : '${saisies - retenues} expériences seront ignorées : '
-                          'renseignez au moins le poste, l’employeur ou la '
-                          'description.',
+                          'renseignez au moins le poste ou l’employeur.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
                 ),

@@ -15,12 +15,16 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Utilisateur {
 
- int get id; String get firstname; String get lastname; String get username; String get numberid; String get email;/// `enabled` en base : faux tant que l'email n'est pas vérifié (§3.2).
-/// La connexion réussit malgré tout (bug BUG-02) : c'est l'app qui
-/// aiguille vers l'écran de vérification.
- bool get enabled; bool get recruted;@JsonKey(name: 'is_admin') bool get isAdmin;/// Évite un aller-retour au démarrage : l'app sait immédiatement s'il faut
-/// router vers le wizard ou vers le résumé (§7.2).
-@JsonKey(name: 'has_demande') bool get hasDemande;@JsonKey(name: 'demande_id') int? get demandeId;@JsonKey(name: 'last_login') DateTime? get lastLogin;
+ int get id; String get firstname; String get lastname; String get username; String get numberid; String get email;/// `enabled` en base : faux tant que l'email n'est pas vérifié (§3.1).
+/// La connexion réussit malgré tout : c'est l'app qui retient
+/// l'utilisateur sur l'écran de vérification.
+ bool get enabled;/// Vrai si une fiche `userdata` existe déjà — `has_profile` à la
+/// connexion (§3.2), `profile_summary.has_userdata` sur `/auth/me`
+/// (§3.3). Évite un aller-retour au démarrage pour savoir s'il faut
+/// ouvrir le wizard ou le résumé.
+@JsonKey(name: 'has_profile') bool get hasProfile;/// Posé par l'administration. Absent du contrat v1 : il reste ici parce
+/// que l'accueil sait l'afficher dès que le serveur le renverra.
+ bool get recruted;@JsonKey(name: 'is_admin') bool get isAdmin;@JsonKey(name: 'date_inscription') DateTime? get dateInscription;
 /// Create a copy of Utilisateur
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -33,16 +37,16 @@ $UtilisateurCopyWith<Utilisateur> get copyWith => _$UtilisateurCopyWithImpl<Util
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Utilisateur&&(identical(other.id, id) || other.id == id)&&(identical(other.firstname, firstname) || other.firstname == firstname)&&(identical(other.lastname, lastname) || other.lastname == lastname)&&(identical(other.username, username) || other.username == username)&&(identical(other.numberid, numberid) || other.numberid == numberid)&&(identical(other.email, email) || other.email == email)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.recruted, recruted) || other.recruted == recruted)&&(identical(other.isAdmin, isAdmin) || other.isAdmin == isAdmin)&&(identical(other.hasDemande, hasDemande) || other.hasDemande == hasDemande)&&(identical(other.demandeId, demandeId) || other.demandeId == demandeId)&&(identical(other.lastLogin, lastLogin) || other.lastLogin == lastLogin));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Utilisateur&&(identical(other.id, id) || other.id == id)&&(identical(other.firstname, firstname) || other.firstname == firstname)&&(identical(other.lastname, lastname) || other.lastname == lastname)&&(identical(other.username, username) || other.username == username)&&(identical(other.numberid, numberid) || other.numberid == numberid)&&(identical(other.email, email) || other.email == email)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.hasProfile, hasProfile) || other.hasProfile == hasProfile)&&(identical(other.recruted, recruted) || other.recruted == recruted)&&(identical(other.isAdmin, isAdmin) || other.isAdmin == isAdmin)&&(identical(other.dateInscription, dateInscription) || other.dateInscription == dateInscription));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,firstname,lastname,username,numberid,email,enabled,recruted,isAdmin,hasDemande,demandeId,lastLogin);
+int get hashCode => Object.hash(runtimeType,id,firstname,lastname,username,numberid,email,enabled,hasProfile,recruted,isAdmin,dateInscription);
 
 @override
 String toString() {
-  return 'Utilisateur(id: $id, firstname: $firstname, lastname: $lastname, username: $username, numberid: $numberid, email: $email, enabled: $enabled, recruted: $recruted, isAdmin: $isAdmin, hasDemande: $hasDemande, demandeId: $demandeId, lastLogin: $lastLogin)';
+  return 'Utilisateur(id: $id, firstname: $firstname, lastname: $lastname, username: $username, numberid: $numberid, email: $email, enabled: $enabled, hasProfile: $hasProfile, recruted: $recruted, isAdmin: $isAdmin, dateInscription: $dateInscription)';
 }
 
 
@@ -53,7 +57,7 @@ abstract mixin class $UtilisateurCopyWith<$Res>  {
   factory $UtilisateurCopyWith(Utilisateur value, $Res Function(Utilisateur) _then) = _$UtilisateurCopyWithImpl;
 @useResult
 $Res call({
- int id, String firstname, String lastname, String username, String numberid, String email, bool enabled, bool recruted,@JsonKey(name: 'is_admin') bool isAdmin,@JsonKey(name: 'has_demande') bool hasDemande,@JsonKey(name: 'demande_id') int? demandeId,@JsonKey(name: 'last_login') DateTime? lastLogin
+ int id, String firstname, String lastname, String username, String numberid, String email, bool enabled,@JsonKey(name: 'has_profile') bool hasProfile, bool recruted,@JsonKey(name: 'is_admin') bool isAdmin,@JsonKey(name: 'date_inscription') DateTime? dateInscription
 });
 
 
@@ -70,7 +74,7 @@ class _$UtilisateurCopyWithImpl<$Res>
 
 /// Create a copy of Utilisateur
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? firstname = null,Object? lastname = null,Object? username = null,Object? numberid = null,Object? email = null,Object? enabled = null,Object? recruted = null,Object? isAdmin = null,Object? hasDemande = null,Object? demandeId = freezed,Object? lastLogin = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? firstname = null,Object? lastname = null,Object? username = null,Object? numberid = null,Object? email = null,Object? enabled = null,Object? hasProfile = null,Object? recruted = null,Object? isAdmin = null,Object? dateInscription = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,firstname: null == firstname ? _self.firstname : firstname // ignore: cast_nullable_to_non_nullable
@@ -79,11 +83,10 @@ as String,username: null == username ? _self.username : username // ignore: cast
 as String,numberid: null == numberid ? _self.numberid : numberid // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
 as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,hasProfile: null == hasProfile ? _self.hasProfile : hasProfile // ignore: cast_nullable_to_non_nullable
 as bool,recruted: null == recruted ? _self.recruted : recruted // ignore: cast_nullable_to_non_nullable
 as bool,isAdmin: null == isAdmin ? _self.isAdmin : isAdmin // ignore: cast_nullable_to_non_nullable
-as bool,hasDemande: null == hasDemande ? _self.hasDemande : hasDemande // ignore: cast_nullable_to_non_nullable
-as bool,demandeId: freezed == demandeId ? _self.demandeId : demandeId // ignore: cast_nullable_to_non_nullable
-as int?,lastLogin: freezed == lastLogin ? _self.lastLogin : lastLogin // ignore: cast_nullable_to_non_nullable
+as bool,dateInscription: freezed == dateInscription ? _self.dateInscription : dateInscription // ignore: cast_nullable_to_non_nullable
 as DateTime?,
   ));
 }
@@ -169,10 +172,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String firstname,  String lastname,  String username,  String numberid,  String email,  bool enabled,  bool recruted, @JsonKey(name: 'is_admin')  bool isAdmin, @JsonKey(name: 'has_demande')  bool hasDemande, @JsonKey(name: 'demande_id')  int? demandeId, @JsonKey(name: 'last_login')  DateTime? lastLogin)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String firstname,  String lastname,  String username,  String numberid,  String email,  bool enabled, @JsonKey(name: 'has_profile')  bool hasProfile,  bool recruted, @JsonKey(name: 'is_admin')  bool isAdmin, @JsonKey(name: 'date_inscription')  DateTime? dateInscription)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Utilisateur() when $default != null:
-return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.numberid,_that.email,_that.enabled,_that.recruted,_that.isAdmin,_that.hasDemande,_that.demandeId,_that.lastLogin);case _:
+return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.numberid,_that.email,_that.enabled,_that.hasProfile,_that.recruted,_that.isAdmin,_that.dateInscription);case _:
   return orElse();
 
 }
@@ -190,10 +193,10 @@ return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.num
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String firstname,  String lastname,  String username,  String numberid,  String email,  bool enabled,  bool recruted, @JsonKey(name: 'is_admin')  bool isAdmin, @JsonKey(name: 'has_demande')  bool hasDemande, @JsonKey(name: 'demande_id')  int? demandeId, @JsonKey(name: 'last_login')  DateTime? lastLogin)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String firstname,  String lastname,  String username,  String numberid,  String email,  bool enabled, @JsonKey(name: 'has_profile')  bool hasProfile,  bool recruted, @JsonKey(name: 'is_admin')  bool isAdmin, @JsonKey(name: 'date_inscription')  DateTime? dateInscription)  $default,) {final _that = this;
 switch (_that) {
 case _Utilisateur():
-return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.numberid,_that.email,_that.enabled,_that.recruted,_that.isAdmin,_that.hasDemande,_that.demandeId,_that.lastLogin);case _:
+return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.numberid,_that.email,_that.enabled,_that.hasProfile,_that.recruted,_that.isAdmin,_that.dateInscription);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -210,10 +213,10 @@ return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.num
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String firstname,  String lastname,  String username,  String numberid,  String email,  bool enabled,  bool recruted, @JsonKey(name: 'is_admin')  bool isAdmin, @JsonKey(name: 'has_demande')  bool hasDemande, @JsonKey(name: 'demande_id')  int? demandeId, @JsonKey(name: 'last_login')  DateTime? lastLogin)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String firstname,  String lastname,  String username,  String numberid,  String email,  bool enabled, @JsonKey(name: 'has_profile')  bool hasProfile,  bool recruted, @JsonKey(name: 'is_admin')  bool isAdmin, @JsonKey(name: 'date_inscription')  DateTime? dateInscription)?  $default,) {final _that = this;
 switch (_that) {
 case _Utilisateur() when $default != null:
-return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.numberid,_that.email,_that.enabled,_that.recruted,_that.isAdmin,_that.hasDemande,_that.demandeId,_that.lastLogin);case _:
+return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.numberid,_that.email,_that.enabled,_that.hasProfile,_that.recruted,_that.isAdmin,_that.dateInscription);case _:
   return null;
 
 }
@@ -225,7 +228,7 @@ return $default(_that.id,_that.firstname,_that.lastname,_that.username,_that.num
 @JsonSerializable()
 
 class _Utilisateur extends Utilisateur {
-  const _Utilisateur({required this.id, required this.firstname, required this.lastname, required this.username, required this.numberid, required this.email, this.enabled = false, this.recruted = false, @JsonKey(name: 'is_admin') this.isAdmin = false, @JsonKey(name: 'has_demande') this.hasDemande = false, @JsonKey(name: 'demande_id') this.demandeId, @JsonKey(name: 'last_login') this.lastLogin}): super._();
+  const _Utilisateur({required this.id, required this.firstname, required this.lastname, required this.username, required this.numberid, required this.email, this.enabled = false, @JsonKey(name: 'has_profile') this.hasProfile = false, this.recruted = false, @JsonKey(name: 'is_admin') this.isAdmin = false, @JsonKey(name: 'date_inscription') this.dateInscription}): super._();
   factory _Utilisateur.fromJson(Map<String, dynamic> json) => _$UtilisateurFromJson(json);
 
 @override final  int id;
@@ -234,17 +237,20 @@ class _Utilisateur extends Utilisateur {
 @override final  String username;
 @override final  String numberid;
 @override final  String email;
-/// `enabled` en base : faux tant que l'email n'est pas vérifié (§3.2).
-/// La connexion réussit malgré tout (bug BUG-02) : c'est l'app qui
-/// aiguille vers l'écran de vérification.
+/// `enabled` en base : faux tant que l'email n'est pas vérifié (§3.1).
+/// La connexion réussit malgré tout : c'est l'app qui retient
+/// l'utilisateur sur l'écran de vérification.
 @override@JsonKey() final  bool enabled;
+/// Vrai si une fiche `userdata` existe déjà — `has_profile` à la
+/// connexion (§3.2), `profile_summary.has_userdata` sur `/auth/me`
+/// (§3.3). Évite un aller-retour au démarrage pour savoir s'il faut
+/// ouvrir le wizard ou le résumé.
+@override@JsonKey(name: 'has_profile') final  bool hasProfile;
+/// Posé par l'administration. Absent du contrat v1 : il reste ici parce
+/// que l'accueil sait l'afficher dès que le serveur le renverra.
 @override@JsonKey() final  bool recruted;
 @override@JsonKey(name: 'is_admin') final  bool isAdmin;
-/// Évite un aller-retour au démarrage : l'app sait immédiatement s'il faut
-/// router vers le wizard ou vers le résumé (§7.2).
-@override@JsonKey(name: 'has_demande') final  bool hasDemande;
-@override@JsonKey(name: 'demande_id') final  int? demandeId;
-@override@JsonKey(name: 'last_login') final  DateTime? lastLogin;
+@override@JsonKey(name: 'date_inscription') final  DateTime? dateInscription;
 
 /// Create a copy of Utilisateur
 /// with the given fields replaced by the non-null parameter values.
@@ -259,16 +265,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Utilisateur&&(identical(other.id, id) || other.id == id)&&(identical(other.firstname, firstname) || other.firstname == firstname)&&(identical(other.lastname, lastname) || other.lastname == lastname)&&(identical(other.username, username) || other.username == username)&&(identical(other.numberid, numberid) || other.numberid == numberid)&&(identical(other.email, email) || other.email == email)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.recruted, recruted) || other.recruted == recruted)&&(identical(other.isAdmin, isAdmin) || other.isAdmin == isAdmin)&&(identical(other.hasDemande, hasDemande) || other.hasDemande == hasDemande)&&(identical(other.demandeId, demandeId) || other.demandeId == demandeId)&&(identical(other.lastLogin, lastLogin) || other.lastLogin == lastLogin));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Utilisateur&&(identical(other.id, id) || other.id == id)&&(identical(other.firstname, firstname) || other.firstname == firstname)&&(identical(other.lastname, lastname) || other.lastname == lastname)&&(identical(other.username, username) || other.username == username)&&(identical(other.numberid, numberid) || other.numberid == numberid)&&(identical(other.email, email) || other.email == email)&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.hasProfile, hasProfile) || other.hasProfile == hasProfile)&&(identical(other.recruted, recruted) || other.recruted == recruted)&&(identical(other.isAdmin, isAdmin) || other.isAdmin == isAdmin)&&(identical(other.dateInscription, dateInscription) || other.dateInscription == dateInscription));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,firstname,lastname,username,numberid,email,enabled,recruted,isAdmin,hasDemande,demandeId,lastLogin);
+int get hashCode => Object.hash(runtimeType,id,firstname,lastname,username,numberid,email,enabled,hasProfile,recruted,isAdmin,dateInscription);
 
 @override
 String toString() {
-  return 'Utilisateur(id: $id, firstname: $firstname, lastname: $lastname, username: $username, numberid: $numberid, email: $email, enabled: $enabled, recruted: $recruted, isAdmin: $isAdmin, hasDemande: $hasDemande, demandeId: $demandeId, lastLogin: $lastLogin)';
+  return 'Utilisateur(id: $id, firstname: $firstname, lastname: $lastname, username: $username, numberid: $numberid, email: $email, enabled: $enabled, hasProfile: $hasProfile, recruted: $recruted, isAdmin: $isAdmin, dateInscription: $dateInscription)';
 }
 
 
@@ -279,7 +285,7 @@ abstract mixin class _$UtilisateurCopyWith<$Res> implements $UtilisateurCopyWith
   factory _$UtilisateurCopyWith(_Utilisateur value, $Res Function(_Utilisateur) _then) = __$UtilisateurCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String firstname, String lastname, String username, String numberid, String email, bool enabled, bool recruted,@JsonKey(name: 'is_admin') bool isAdmin,@JsonKey(name: 'has_demande') bool hasDemande,@JsonKey(name: 'demande_id') int? demandeId,@JsonKey(name: 'last_login') DateTime? lastLogin
+ int id, String firstname, String lastname, String username, String numberid, String email, bool enabled,@JsonKey(name: 'has_profile') bool hasProfile, bool recruted,@JsonKey(name: 'is_admin') bool isAdmin,@JsonKey(name: 'date_inscription') DateTime? dateInscription
 });
 
 
@@ -296,7 +302,7 @@ class __$UtilisateurCopyWithImpl<$Res>
 
 /// Create a copy of Utilisateur
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? firstname = null,Object? lastname = null,Object? username = null,Object? numberid = null,Object? email = null,Object? enabled = null,Object? recruted = null,Object? isAdmin = null,Object? hasDemande = null,Object? demandeId = freezed,Object? lastLogin = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? firstname = null,Object? lastname = null,Object? username = null,Object? numberid = null,Object? email = null,Object? enabled = null,Object? hasProfile = null,Object? recruted = null,Object? isAdmin = null,Object? dateInscription = freezed,}) {
   return _then(_Utilisateur(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,firstname: null == firstname ? _self.firstname : firstname // ignore: cast_nullable_to_non_nullable
@@ -305,11 +311,10 @@ as String,username: null == username ? _self.username : username // ignore: cast
 as String,numberid: null == numberid ? _self.numberid : numberid // ignore: cast_nullable_to_non_nullable
 as String,email: null == email ? _self.email : email // ignore: cast_nullable_to_non_nullable
 as String,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,hasProfile: null == hasProfile ? _self.hasProfile : hasProfile // ignore: cast_nullable_to_non_nullable
 as bool,recruted: null == recruted ? _self.recruted : recruted // ignore: cast_nullable_to_non_nullable
 as bool,isAdmin: null == isAdmin ? _self.isAdmin : isAdmin // ignore: cast_nullable_to_non_nullable
-as bool,hasDemande: null == hasDemande ? _self.hasDemande : hasDemande // ignore: cast_nullable_to_non_nullable
-as bool,demandeId: freezed == demandeId ? _self.demandeId : demandeId // ignore: cast_nullable_to_non_nullable
-as int?,lastLogin: freezed == lastLogin ? _self.lastLogin : lastLogin // ignore: cast_nullable_to_non_nullable
+as bool,dateInscription: freezed == dateInscription ? _self.dateInscription : dateInscription // ignore: cast_nullable_to_non_nullable
 as DateTime?,
   ));
 }

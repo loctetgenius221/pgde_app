@@ -38,8 +38,21 @@ void main() {
       );
     });
 
-    test('sans expérience déclarée, l’étape 3 est complète', () {
-      expect(complete.estComplete(EtapeWizard.experiences), isTrue);
+    test('l’étape 3 attend une réponse, pas une absence de réponse', () {
+      // Sans réponse, l'étape reste à remplir : sinon le dossier afficherait
+      // « complétée » avant que le candidat l'ait seulement ouverte.
+      expect(complete.aDeLExperience, isNull);
+      expect(complete.estComplete(EtapeWizard.experiences), isFalse);
+
+      // « Non » est une réponse valide, et elle suffit.
+      expect(
+        complete
+            .copyWith(aDeLExperience: false)
+            .estComplete(EtapeWizard.experiences),
+        isTrue,
+      );
+
+      // « Oui » exige au moins une expérience exploitable.
       expect(
         complete
             .copyWith(aDeLExperience: true)
@@ -76,9 +89,12 @@ void main() {
       expect(const Demande(regionResidenceId: 15).resideHorsSenegal, isTrue);
     });
 
-    test('« sans diplôme » vaut 14, pas 20 (§6.1 B4)', () {
+    test('« sans diplôme » se reconnaît sous ses deux identifiants', () {
+      // L'analyse de la base donnait 14 ; le contrat §5.3 accepte aussi 20.
+      // Les deux disent la même chose, et un candidat ne doit pas voir son
+      // niveau changer selon la version du serveur qui lui répond.
       expect(const Formation(academicId: 14).sansDiplome, isTrue);
-      expect(const Formation(academicId: 20).sansDiplome, isFalse);
+      expect(const Formation(academicId: 20).sansDiplome, isTrue);
       expect(const Formation(academicId: 7).sansDiplome, isFalse);
     });
   });

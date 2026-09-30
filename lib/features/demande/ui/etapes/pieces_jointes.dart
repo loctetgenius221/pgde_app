@@ -16,12 +16,13 @@ import '../../domain/regles_fichiers.dart';
 /// Pièces jointes du dossier, réparties sur deux étapes.
 ///
 /// La **photo** ouvre l'étape 1 : c'est une pièce d'identité, elle a sa place
-/// avec l'état civil, pas au milieu des diplômes. Les **documents** restent à
-/// l'étape 2, où le candidat a ses justificatifs sous la main (§4).
+/// avec l'état civil, pas au milieu des diplômes. Les **justificatifs** sont
+/// demandés à l'étape 2, chacun dans la carte de la formation qu'il prouve
+/// (contrat §6.4).
 ///
-/// Les fichiers choisis sont mis en file et partent à l'enregistrement, comme
-/// le fait le formulaire web (§7.7b). Les pièces déjà sur le serveur se
-/// retirent, elles, immédiatement (§7.5).
+/// Les fichiers choisis sont mis en file et partent à l'enregistrement : un
+/// justificatif est déposé avec un `formation_index`, et ce rang n'existe
+/// côté serveur qu'une fois les formations enregistrées.
 
 /// Mutualise le choix d'un fichier : exécution, validation, message d'échec.
 mixin _ChoixDePiece<T extends ConsumerStatefulWidget> on ConsumerState<T> {
@@ -72,9 +73,9 @@ class _SectionPhotoState extends ConsumerState<SectionPhoto>
     if (fichier == null) return;
 
     final String? refus = ReglesFichiers.refus(
+      type: TypeFichier.photo,
       nomFichier: fichier.path,
       octets: fichier.lengthSync(),
-      estPhoto: true,
     );
     if (refus != null) {
       if (mounted) annoncer(refus);
@@ -92,11 +93,9 @@ class _SectionPhotoState extends ConsumerState<SectionPhoto>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const TitreSection(
+        TitreSection(
           'Photo de profil',
-          aide:
-              'JPG, PNG ou GIF - 2 Mo maximum. '
-              'Les images trop lourdes sont compressées automatiquement.',
+          aide: ReglesFichiers.formatsAdmis(TypeFichier.photo),
         ),
         Row(
           children: <Widget>[
@@ -141,7 +140,7 @@ class _SectionPhotoState extends ConsumerState<SectionPhoto>
           Padding(
             padding: const EdgeInsets.only(top: Espace.xs),
             child: Text(
-              'Cette photo sera envoyée à l’enregistrement de votre demande.',
+              'Sera envoyée à l’enregistrement.',
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -175,152 +174,121 @@ class _SectionPhotoState extends ConsumerState<SectionPhoto>
 }
 
 // ---------------------------------------------------------------------------
-// Étape 2 — documents justificatifs
+// Étape 2 — un justificatif par formation
 // ---------------------------------------------------------------------------
 
-class SectionDocuments extends ConsumerStatefulWidget {
-  const SectionDocuments({required this.demande, super.key});
+/// Justificatif d'**une** formation.
+///
+/// Le document est demandé dans la carte de la formation qu'il prouve, et non
+/// dans une corbeille commune en bas d'écran : c'est au moment où il vient de
+/// saisir « Licence — 2019 » que le candidat sait lequel de ses fichiers
+/// joindre. Une liste globale l'oblige à refaire l'association de tête, et
+/// l'administration à la deviner.
+class JustificatifFormation extends ConsumerStatefulWidget {
+  const JustificatifFormation({
+    required this.rang,
+    required this.depose,
+    super.key,
+  });
 
-  final Demande demande;
+  /// Rang de la formation dans la liste. C'est le `formation_index` du
+  /// contrat §6.4 : le serveur s'en sert pour rattacher le document.
+  final int rang;
+
+  /// Justificatif déjà sur le serveur pour cette formation.
+  final FichierJoint? depose;
 
   @override
-  ConsumerState<SectionDocuments> createState() => _SectionDocumentsState();
+  ConsumerState<JustificatifFormation> createState() =>
+      _JustificatifFormationState();
 }
 
-class _SectionDocumentsState extends ConsumerState<SectionDocuments>
+class _JustificatifFormationState extends ConsumerState<JustificatifFormation>
     with _ChoixDePiece {
-  Future<void> _ajouter(TypeFichier type) => agir(() async {
+  Future<void> _choisir() => agir(() async {
     final List<File> choisis = await ref
         .read(selecteurFichiersProvider)
         .documents();
     if (choisis.isEmpty) return;
 
-    final List<File> retenus = <File>[];
-    for (final File fichier in choisis) {
-      final String? refus = ReglesFichiers.refus(
-        nomFichier: fichier.path,
-        octets: fichier.lengthSync(),
-        estPhoto: false,
-      );
-      if (refus == null) {
-        retenus.add(fichier);
-      } else if (mounted) {
-        annoncer('${_nomDe(fichier)} : $refus');
-      }
-    }
-    if (retenus.isNotEmpty) {
-      ref.read(piecesEnAttenteProvider.notifier).ajouter(type, retenus);
-    }
-  });
-
-  static String _nomDe(File fichier) =>
-      fichier.path.split(RegExp(r'[\\/]')).last;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final PiecesEnAttente attente = ref.watch(piecesEnAttenteProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        // §4 propose diplômes **et** CV. Le CV est retiré de la saisie : il
-        // doit être produit par le serveur à partir du dossier. Le type et les
-        // appels restent en place, prêts si la décision change.
-        for (final TypeFichier type in TypeFichier.proposes) ...<Widget>[
-          TitreSection(
-            type == TypeFichier.diplome ? 'Diplômes et attestations' : 'CV',
-            aide: ReglesFichiers.formatsAdmis(type),
-          ),
-          _Liste(
-            deposees: widget.demande.fichiersDe(type),
-            enAttente: attente.de(type),
-            occupe: occupe,
-            onAjouter: () => _ajouter(type),
-            onRetirerEnAttente: (f) =>
-                ref.read(piecesEnAttenteProvider.notifier).retirer(type, f),
-            onRetirerDeposee: (chemin) => agir(
-              () => ref
-                  .read(demandeControllerProvider.notifier)
-                  .retirerPiece(type, chemin),
-            ),
-          ),
-        ],
-
-        if (attente.nombre > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: Espace.md),
-            child: Text(
-              attente.nombre == 1
-                  ? 'Une pièce sera envoyée à l’enregistrement de votre demande.'
-                  : '${attente.nombre} pièces seront envoyées à '
-                        'l’enregistrement de votre demande.',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-      ],
+    // Une formation, un justificatif : si le sélecteur en rend plusieurs, on
+    // retient le premier plutôt que d'en déposer dont plus rien ne dirait à
+    // quoi ils se rattachent.
+    final File fichier = choisis.first;
+    final String? refus = ReglesFichiers.refus(
+      type: TypeFichier.diplome,
+      nomFichier: fichier.path,
+      octets: fichier.lengthSync(),
     );
-  }
-}
-
-class _Liste extends StatelessWidget {
-  const _Liste({
-    required this.deposees,
-    required this.enAttente,
-    required this.occupe,
-    required this.onAjouter,
-    required this.onRetirerEnAttente,
-    required this.onRetirerDeposee,
+    if (refus != null) {
+      if (mounted) annoncer(refus);
+      return;
+    }
+    ref
+        .read(piecesEnAttenteProvider.notifier)
+        .choisirJustificatif(widget.rang, fichier);
   });
-
-  final List<FichierJoint> deposees;
-  final List<File> enAttente;
-  final bool occupe;
-  final VoidCallback onAjouter;
-  final ValueChanged<File> onRetirerEnAttente;
-  final ValueChanged<String> onRetirerDeposee;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final File? enAttente = ref
+        .watch(piecesEnAttenteProvider)
+        .justificatifs[widget.rang];
+    final FichierJoint? depose = widget.depose;
+
+    // Le choix local prime sur la pièce déposée : c'est la dernière intention
+    // du candidat, et c'est elle qui partira à l'enregistrement.
+    if (enAttente != null) {
+      return _Ligne(
+        nom: nomDe(enAttente),
+        detail: ReglesFichiers.tailleLisible(enAttente.lengthSync()),
+        envoyee: false,
+        occupe: occupe,
+        onRetirer: () => ref
+            .read(piecesEnAttenteProvider.notifier)
+            .retirerJustificatif(widget.rang),
+      );
+    }
+    if (depose != null) {
+      return _Ligne(
+        nom: depose.nomAffiche,
+        detail: depose.tailleLisible,
+        envoyee: true,
+        occupe: occupe,
+        onRetirer: () => agir(
+          () => ref
+              .read(demandeControllerProvider.notifier)
+              .retirerJustificatif(widget.rang),
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        for (final FichierJoint piece in deposees)
-          _Ligne(
-            nom: piece.nomAffiche,
-            detail: piece.tailleLisible,
-            envoyee: true,
-            occupe: occupe,
-            onRetirer: () => onRetirerDeposee(piece.chemin),
-          ),
-        for (final File fichier in enAttente)
-          _Ligne(
-            nom: fichier.path.split(RegExp(r'[\\/]')).last,
-            detail: ReglesFichiers.tailleLisible(fichier.lengthSync()),
-            envoyee: false,
-            occupe: occupe,
-            onRetirer: () => onRetirerEnAttente(fichier),
-          ),
-        if (deposees.isEmpty && enAttente.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Espace.xs),
-            child: Text(
-              'Aucun document pour le moment.',
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-        const SizedBox(height: Espace.xs),
         OutlinedButton.icon(
-          onPressed: occupe ? null : onAjouter,
+          onPressed: occupe ? null : _choisir,
           icon: const Icone(Icones.ajouter, taille: 20),
-          label: const Text('Ajouter un document'),
+          label: const Text('Joindre le justificatif'),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: Espace.xxs),
+          child: Text(
+            // §6.4 accepte les images : le candidat peut photographier son
+            // diplôme, ce que l'ancienne règle refusait.
+            ReglesFichiers.formatsAdmis(TypeFichier.diplome),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
         ),
       ],
     );
   }
 }
+
+/// Nom d'un fichier local, quel que soit le séparateur de la plateforme.
+String nomDe(File fichier) => fichier.path.split(RegExp(r'[\\/]')).last;
 
 class _Ligne extends StatelessWidget {
   const _Ligne({

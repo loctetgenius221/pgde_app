@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/assistant/ui/assistant_page.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/ui/connexion_page.dart';
 import '../../features/auth/ui/inscription_page.dart';
@@ -28,6 +29,7 @@ abstract final class Routes {
   static const String accueil = '/';
   static const String wizard = '/demande';
   static const String resume = '/dossier';
+  static const String assistant = '/assistant';
 
   /// Ouvre le wizard directement sur une étape.
   static String wizardEtape(EtapeWizard etape) =>
@@ -113,6 +115,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       _fondu(Routes.verificationEmail, const VerificationEmailPage()),
       _fondu(Routes.accueil, const AccueilPage()),
       GoRoute(path: Routes.resume, builder: (_, _) => const ResumePage()),
+      // Pas de fondu ici : l'avatar traverse la navigation par `Hero`, et un
+      // fondu superposé brouillerait la continuité qu'il établit.
+      GoRoute(
+        path: Routes.assistant,
+        builder: (_, _) => const AssistantPage(),
+      ),
       GoRoute(
         path: Routes.wizard,
         builder: (_, state) => WizardPage(

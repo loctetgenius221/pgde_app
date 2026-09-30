@@ -1883,6 +1883,8 @@ as String,
 /// @nodoc
 mixin _$Referentiel {
 
+/// Absente du contrat v1 : vide tant que le serveur n'en publie pas.
+/// Elle sert au cache local, qui doit savoir se périmer.
  String get version; List<Region> get regions; List<Departement> get departements; List<Secteur> get secteurs; List<Emploi> get emplois; List<Academic> get academics; List<Handicap> get handicaps; List<Pays> get countries;
 /// Create a copy of Referentiel
 /// with the given fields replaced by the non-null parameter values.
@@ -2084,10 +2086,12 @@ return $default(_that.version,_that.regions,_that.departements,_that.secteurs,_t
 @JsonSerializable()
 
 class _Referentiel extends Referentiel {
-  const _Referentiel({required this.version, final  List<Region> regions = const <Region>[], final  List<Departement> departements = const <Departement>[], final  List<Secteur> secteurs = const <Secteur>[], final  List<Emploi> emplois = const <Emploi>[], final  List<Academic> academics = const <Academic>[], final  List<Handicap> handicaps = const <Handicap>[], final  List<Pays> countries = const <Pays>[]}): _regions = regions,_departements = departements,_secteurs = secteurs,_emplois = emplois,_academics = academics,_handicaps = handicaps,_countries = countries,super._();
+  const _Referentiel({this.version = '', final  List<Region> regions = const <Region>[], final  List<Departement> departements = const <Departement>[], final  List<Secteur> secteurs = const <Secteur>[], final  List<Emploi> emplois = const <Emploi>[], final  List<Academic> academics = const <Academic>[], final  List<Handicap> handicaps = const <Handicap>[], final  List<Pays> countries = const <Pays>[]}): _regions = regions,_departements = departements,_secteurs = secteurs,_emplois = emplois,_academics = academics,_handicaps = handicaps,_countries = countries,super._();
   factory _Referentiel.fromJson(Map<String, dynamic> json) => _$ReferentielFromJson(json);
 
-@override final  String version;
+/// Absente du contrat v1 : vide tant que le serveur n'en publie pas.
+/// Elle sert au cache local, qui doit savoir se périmer.
+@override@JsonKey() final  String version;
  final  List<Region> _regions;
 @override@JsonKey() List<Region> get regions {
   if (_regions is EqualUnmodifiableListView) return _regions;

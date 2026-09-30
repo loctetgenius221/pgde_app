@@ -36,10 +36,25 @@ class ApiClient {
   Future<Object?> _send(Future<Response<dynamic>> Function() request) async {
     try {
       final response = await request();
-      return response.data as Object?;
+      return _contenu(response.data as Object?);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
+  }
+
+  /// Déballe l'enveloppe standard `{success, message, data}` (contrat §2).
+  ///
+  /// **Toutes** les réponses la portent. La laisser traverser obligerait
+  /// chaque mappeur à connaître une convention de transport qui ne le regarde
+  /// pas — et à répéter `json['data']` une trentaine de fois. Elle s'arrête
+  /// donc ici, comme `DioException`.
+  static Object? _contenu(Object? corps) {
+    if (corps is! Map) return corps;
+    final Json json = corps.cast<String, dynamic>();
+    // Pas de `data` sur les réponses qui n'ont rien à rendre — une
+    // déconnexion, une suppression. On rend l'enveloppe plutôt que `null` :
+    // son `message` reste exploitable par l'appelant.
+    return json.containsKey('data') ? json['data'] : json;
   }
 }
 

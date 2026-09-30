@@ -14,7 +14,8 @@ enum EtapeWizard {
   ///
   /// Les clés indexées renvoyées par Laravel (`formations.0.academic_id`,
   /// `experiences.1.years`) sont normalisées sur leur racine.
-  static EtapeWizard? pourChamp(String champ) => _parChamp[champ.split('.').first];
+  static EtapeWizard? pourChamp(String champ) =>
+      _parChamp[champ.split('.').first];
 
   static const Map<String, EtapeWizard> _parChamp = <String, EtapeWizard>{
     'datenaiss': identite,
@@ -26,11 +27,11 @@ enum EtapeWizard {
     'telephone1': identite,
     'telephone2': identite,
     'addresse': identite,
-    'country_id': identite,
     'regionnaiss_id': identite,
     'departementnaiss_id': identite,
     'regionresidence_id': identite,
     'departementresidence_id': identite,
+    'has_handicap': identite,
     'handicap_id': identite,
     // La photo est saisie à l'étape 1 dans l'app, alors que le formulaire web
     // la place à l'étape 2 (§4). C'est l'écran qui fait foi pour renvoyer
@@ -38,7 +39,11 @@ enum EtapeWizard {
     'photo_profil': identite,
     'formations': formations,
     'diplome_file': formations,
-    'cv_file': formations,
+    'formation_index': formations,
+    // §6.2 — le CV appartient aux vœux dans le contrat, mais il n'est pas
+    // saisi dans l'app : s'il revient en erreur, c'est l'étape 4 qui le
+    // porterait.
+    'cv_file': voeux,
     'hasExperience': experiences,
     'experiences': experiences,
     'emploi1_id': voeux,

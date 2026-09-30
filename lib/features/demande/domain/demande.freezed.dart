@@ -287,7 +287,13 @@ as int?,
 /// @nodoc
 mixin _$Formation {
 
- int get academicId; String get diplome; int? get anneeDiplome; String get specialite; String get etablissement;
+ int get academicId; String get diplome; int? get anneeDiplome; String get specialite; String get etablissement;/// Justificatif de **cette** formation.
+///
+/// Le contrat le porte à deux endroits : `diplome_file_url` dans la
+/// lecture du profil (§5.1) et `formation_index` au téléversement
+/// (§6.4). Le lien formation ↔ document est donc enfin tenu par le
+/// serveur, et non plus reconstitué côté app.
+ FichierJoint? get justificatif;
 /// Create a copy of Formation
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -300,16 +306,16 @@ $FormationCopyWith<Formation> get copyWith => _$FormationCopyWithImpl<Formation>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Formation&&(identical(other.academicId, academicId) || other.academicId == academicId)&&(identical(other.diplome, diplome) || other.diplome == diplome)&&(identical(other.anneeDiplome, anneeDiplome) || other.anneeDiplome == anneeDiplome)&&(identical(other.specialite, specialite) || other.specialite == specialite)&&(identical(other.etablissement, etablissement) || other.etablissement == etablissement));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Formation&&(identical(other.academicId, academicId) || other.academicId == academicId)&&(identical(other.diplome, diplome) || other.diplome == diplome)&&(identical(other.anneeDiplome, anneeDiplome) || other.anneeDiplome == anneeDiplome)&&(identical(other.specialite, specialite) || other.specialite == specialite)&&(identical(other.etablissement, etablissement) || other.etablissement == etablissement)&&(identical(other.justificatif, justificatif) || other.justificatif == justificatif));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,academicId,diplome,anneeDiplome,specialite,etablissement);
+int get hashCode => Object.hash(runtimeType,academicId,diplome,anneeDiplome,specialite,etablissement,justificatif);
 
 @override
 String toString() {
-  return 'Formation(academicId: $academicId, diplome: $diplome, anneeDiplome: $anneeDiplome, specialite: $specialite, etablissement: $etablissement)';
+  return 'Formation(academicId: $academicId, diplome: $diplome, anneeDiplome: $anneeDiplome, specialite: $specialite, etablissement: $etablissement, justificatif: $justificatif)';
 }
 
 
@@ -320,11 +326,11 @@ abstract mixin class $FormationCopyWith<$Res>  {
   factory $FormationCopyWith(Formation value, $Res Function(Formation) _then) = _$FormationCopyWithImpl;
 @useResult
 $Res call({
- int academicId, String diplome, int? anneeDiplome, String specialite, String etablissement
+ int academicId, String diplome, int? anneeDiplome, String specialite, String etablissement, FichierJoint? justificatif
 });
 
 
-
+$FichierJointCopyWith<$Res>? get justificatif;
 
 }
 /// @nodoc
@@ -337,17 +343,30 @@ class _$FormationCopyWithImpl<$Res>
 
 /// Create a copy of Formation
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? academicId = null,Object? diplome = null,Object? anneeDiplome = freezed,Object? specialite = null,Object? etablissement = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? academicId = null,Object? diplome = null,Object? anneeDiplome = freezed,Object? specialite = null,Object? etablissement = null,Object? justificatif = freezed,}) {
   return _then(_self.copyWith(
 academicId: null == academicId ? _self.academicId : academicId // ignore: cast_nullable_to_non_nullable
 as int,diplome: null == diplome ? _self.diplome : diplome // ignore: cast_nullable_to_non_nullable
 as String,anneeDiplome: freezed == anneeDiplome ? _self.anneeDiplome : anneeDiplome // ignore: cast_nullable_to_non_nullable
 as int?,specialite: null == specialite ? _self.specialite : specialite // ignore: cast_nullable_to_non_nullable
 as String,etablissement: null == etablissement ? _self.etablissement : etablissement // ignore: cast_nullable_to_non_nullable
-as String,
+as String,justificatif: freezed == justificatif ? _self.justificatif : justificatif // ignore: cast_nullable_to_non_nullable
+as FichierJoint?,
   ));
 }
+/// Create a copy of Formation
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$FichierJointCopyWith<$Res>? get justificatif {
+    if (_self.justificatif == null) {
+    return null;
+  }
 
+  return $FichierJointCopyWith<$Res>(_self.justificatif!, (value) {
+    return _then(_self.copyWith(justificatif: value));
+  });
+}
 }
 
 
@@ -429,10 +448,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int academicId,  String diplome,  int? anneeDiplome,  String specialite,  String etablissement)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int academicId,  String diplome,  int? anneeDiplome,  String specialite,  String etablissement,  FichierJoint? justificatif)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Formation() when $default != null:
-return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.specialite,_that.etablissement);case _:
+return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.specialite,_that.etablissement,_that.justificatif);case _:
   return orElse();
 
 }
@@ -450,10 +469,10 @@ return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.speciali
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int academicId,  String diplome,  int? anneeDiplome,  String specialite,  String etablissement)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int academicId,  String diplome,  int? anneeDiplome,  String specialite,  String etablissement,  FichierJoint? justificatif)  $default,) {final _that = this;
 switch (_that) {
 case _Formation():
-return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.specialite,_that.etablissement);case _:
+return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.specialite,_that.etablissement,_that.justificatif);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -470,10 +489,10 @@ return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.speciali
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int academicId,  String diplome,  int? anneeDiplome,  String specialite,  String etablissement)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int academicId,  String diplome,  int? anneeDiplome,  String specialite,  String etablissement,  FichierJoint? justificatif)?  $default,) {final _that = this;
 switch (_that) {
 case _Formation() when $default != null:
-return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.specialite,_that.etablissement);case _:
+return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.specialite,_that.etablissement,_that.justificatif);case _:
   return null;
 
 }
@@ -485,7 +504,7 @@ return $default(_that.academicId,_that.diplome,_that.anneeDiplome,_that.speciali
 @JsonSerializable()
 
 class _Formation extends Formation {
-  const _Formation({required this.academicId, this.diplome = '', this.anneeDiplome, this.specialite = '', this.etablissement = ''}): super._();
+  const _Formation({required this.academicId, this.diplome = '', this.anneeDiplome, this.specialite = '', this.etablissement = '', this.justificatif}): super._();
   factory _Formation.fromJson(Map<String, dynamic> json) => _$FormationFromJson(json);
 
 @override final  int academicId;
@@ -493,6 +512,13 @@ class _Formation extends Formation {
 @override final  int? anneeDiplome;
 @override@JsonKey() final  String specialite;
 @override@JsonKey() final  String etablissement;
+/// Justificatif de **cette** formation.
+///
+/// Le contrat le porte à deux endroits : `diplome_file_url` dans la
+/// lecture du profil (§5.1) et `formation_index` au téléversement
+/// (§6.4). Le lien formation ↔ document est donc enfin tenu par le
+/// serveur, et non plus reconstitué côté app.
+@override final  FichierJoint? justificatif;
 
 /// Create a copy of Formation
 /// with the given fields replaced by the non-null parameter values.
@@ -507,16 +533,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Formation&&(identical(other.academicId, academicId) || other.academicId == academicId)&&(identical(other.diplome, diplome) || other.diplome == diplome)&&(identical(other.anneeDiplome, anneeDiplome) || other.anneeDiplome == anneeDiplome)&&(identical(other.specialite, specialite) || other.specialite == specialite)&&(identical(other.etablissement, etablissement) || other.etablissement == etablissement));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Formation&&(identical(other.academicId, academicId) || other.academicId == academicId)&&(identical(other.diplome, diplome) || other.diplome == diplome)&&(identical(other.anneeDiplome, anneeDiplome) || other.anneeDiplome == anneeDiplome)&&(identical(other.specialite, specialite) || other.specialite == specialite)&&(identical(other.etablissement, etablissement) || other.etablissement == etablissement)&&(identical(other.justificatif, justificatif) || other.justificatif == justificatif));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,academicId,diplome,anneeDiplome,specialite,etablissement);
+int get hashCode => Object.hash(runtimeType,academicId,diplome,anneeDiplome,specialite,etablissement,justificatif);
 
 @override
 String toString() {
-  return 'Formation(academicId: $academicId, diplome: $diplome, anneeDiplome: $anneeDiplome, specialite: $specialite, etablissement: $etablissement)';
+  return 'Formation(academicId: $academicId, diplome: $diplome, anneeDiplome: $anneeDiplome, specialite: $specialite, etablissement: $etablissement, justificatif: $justificatif)';
 }
 
 
@@ -527,11 +553,11 @@ abstract mixin class _$FormationCopyWith<$Res> implements $FormationCopyWith<$Re
   factory _$FormationCopyWith(_Formation value, $Res Function(_Formation) _then) = __$FormationCopyWithImpl;
 @override @useResult
 $Res call({
- int academicId, String diplome, int? anneeDiplome, String specialite, String etablissement
+ int academicId, String diplome, int? anneeDiplome, String specialite, String etablissement, FichierJoint? justificatif
 });
 
 
-
+@override $FichierJointCopyWith<$Res>? get justificatif;
 
 }
 /// @nodoc
@@ -544,18 +570,31 @@ class __$FormationCopyWithImpl<$Res>
 
 /// Create a copy of Formation
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? academicId = null,Object? diplome = null,Object? anneeDiplome = freezed,Object? specialite = null,Object? etablissement = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? academicId = null,Object? diplome = null,Object? anneeDiplome = freezed,Object? specialite = null,Object? etablissement = null,Object? justificatif = freezed,}) {
   return _then(_Formation(
 academicId: null == academicId ? _self.academicId : academicId // ignore: cast_nullable_to_non_nullable
 as int,diplome: null == diplome ? _self.diplome : diplome // ignore: cast_nullable_to_non_nullable
 as String,anneeDiplome: freezed == anneeDiplome ? _self.anneeDiplome : anneeDiplome // ignore: cast_nullable_to_non_nullable
 as int?,specialite: null == specialite ? _self.specialite : specialite // ignore: cast_nullable_to_non_nullable
 as String,etablissement: null == etablissement ? _self.etablissement : etablissement // ignore: cast_nullable_to_non_nullable
-as String,
+as String,justificatif: freezed == justificatif ? _self.justificatif : justificatif // ignore: cast_nullable_to_non_nullable
+as FichierJoint?,
   ));
 }
 
+/// Create a copy of Formation
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$FichierJointCopyWith<$Res>? get justificatif {
+    if (_self.justificatif == null) {
+    return null;
+  }
 
+  return $FichierJointCopyWith<$Res>(_self.justificatif!, (value) {
+    return _then(_self.copyWith(justificatif: value));
+  });
+}
 }
 
 
@@ -834,13 +873,29 @@ as int?,
 /// @nodoc
 mixin _$Demande {
 
- int? get id;// --- Étape 1 : identité et résidence ---
-@DateOnlyConverter() DateTime? get dateNaissance; String get lieuNaissance; String get lieuResidence; String get adresse; Genre? get genre; SituationMatrimoniale? get situationMatrimoniale; String get telephone1; String get telephone2; int get nombreEnfants; int? get paysId; int? get regionNaissanceId; int? get departementNaissanceId; int? get regionResidenceId; int? get departementResidenceId; int? get handicapId;// --- Étape 2 : formations et pièces jointes ---
+/// Vrai si le serveur détient déjà une fiche `userdata`.
+///
+/// Les quatre endpoints d'écriture sont des `PUT` idempotents : il n'y a
+/// plus de création à distinguer d'une mise à jour. Ce drapeau ne sert
+/// donc qu'à l'affichage — « dossier enregistré » plutôt que « demande
+/// en préparation ».
+ bool get deposee;// --- Étape 1 : identité et résidence ---
+@DateOnlyConverter() DateTime? get dateNaissance; String get lieuNaissance; String get lieuResidence; String get adresse; Genre? get genre; SituationMatrimoniale? get situationMatrimoniale; String get telephone1; String get telephone2; int get nombreEnfants; int? get paysId; int? get regionNaissanceId; int? get departementNaissanceId; int? get regionResidenceId; int? get departementResidenceId;// §4 distingue **deux** champs : `handicap` (« 0 » ou « 1 ») et
+// `handicap_id`. Les fondre en un seul rendait « Oui » inexprimable tant
+// qu'aucun type n'était choisi — et donc intapable.
+ bool get aUnHandicap; int? get handicapId;// --- Étape 2 : formations et justificatifs ---
+//
+// Chaque formation porte le sien (§5.1, §6.4). Il n'y a plus de tableau
+// global de diplômes : c'était l'aveu d'un serveur incapable de dire
+// quel document prouvait quelle formation.
  List<Formation> get formations;// Les pièces vivent sur le serveur, déposées par des appels dédiés
-// (§7.5). Elles ne partent donc **pas** dans le corps du formulaire : on
+// (§6). Elles ne partent donc **pas** dans le corps du formulaire : on
 // les garde ici pour l'affichage et la suppression.
- List<FichierJoint> get diplomes; List<FichierJoint> get cv; FichierJoint? get photo;// --- Étape 3 : expériences ---
- bool get aDeLExperience; List<Experience> get experiences;// --- Étape 4 : vœux ---
+ List<FichierJoint> get cv; FichierJoint? get photo;// --- Étape 3 : expériences ---
+// `null` tant que le candidat n'a pas répondu. Un booléen par défaut
+// faisait passer l'étape pour complétée avant même qu'il l'ait ouverte :
+// le dossier affichait une réponse que personne n'avait donnée.
+ bool? get aDeLExperience; List<Experience> get experiences;// --- Étape 4 : vœux ---
  int? get emploi1Id; int? get emploi2Id; int get anneesExperience1; int get anneesExperience2; String get resumeCv;
 /// Create a copy of Demande
 /// with the given fields replaced by the non-null parameter values.
@@ -854,16 +909,16 @@ $DemandeCopyWith<Demande> get copyWith => _$DemandeCopyWithImpl<Demande>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Demande&&(identical(other.id, id) || other.id == id)&&(identical(other.dateNaissance, dateNaissance) || other.dateNaissance == dateNaissance)&&(identical(other.lieuNaissance, lieuNaissance) || other.lieuNaissance == lieuNaissance)&&(identical(other.lieuResidence, lieuResidence) || other.lieuResidence == lieuResidence)&&(identical(other.adresse, adresse) || other.adresse == adresse)&&(identical(other.genre, genre) || other.genre == genre)&&(identical(other.situationMatrimoniale, situationMatrimoniale) || other.situationMatrimoniale == situationMatrimoniale)&&(identical(other.telephone1, telephone1) || other.telephone1 == telephone1)&&(identical(other.telephone2, telephone2) || other.telephone2 == telephone2)&&(identical(other.nombreEnfants, nombreEnfants) || other.nombreEnfants == nombreEnfants)&&(identical(other.paysId, paysId) || other.paysId == paysId)&&(identical(other.regionNaissanceId, regionNaissanceId) || other.regionNaissanceId == regionNaissanceId)&&(identical(other.departementNaissanceId, departementNaissanceId) || other.departementNaissanceId == departementNaissanceId)&&(identical(other.regionResidenceId, regionResidenceId) || other.regionResidenceId == regionResidenceId)&&(identical(other.departementResidenceId, departementResidenceId) || other.departementResidenceId == departementResidenceId)&&(identical(other.handicapId, handicapId) || other.handicapId == handicapId)&&const DeepCollectionEquality().equals(other.formations, formations)&&const DeepCollectionEquality().equals(other.diplomes, diplomes)&&const DeepCollectionEquality().equals(other.cv, cv)&&(identical(other.photo, photo) || other.photo == photo)&&(identical(other.aDeLExperience, aDeLExperience) || other.aDeLExperience == aDeLExperience)&&const DeepCollectionEquality().equals(other.experiences, experiences)&&(identical(other.emploi1Id, emploi1Id) || other.emploi1Id == emploi1Id)&&(identical(other.emploi2Id, emploi2Id) || other.emploi2Id == emploi2Id)&&(identical(other.anneesExperience1, anneesExperience1) || other.anneesExperience1 == anneesExperience1)&&(identical(other.anneesExperience2, anneesExperience2) || other.anneesExperience2 == anneesExperience2)&&(identical(other.resumeCv, resumeCv) || other.resumeCv == resumeCv));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Demande&&(identical(other.deposee, deposee) || other.deposee == deposee)&&(identical(other.dateNaissance, dateNaissance) || other.dateNaissance == dateNaissance)&&(identical(other.lieuNaissance, lieuNaissance) || other.lieuNaissance == lieuNaissance)&&(identical(other.lieuResidence, lieuResidence) || other.lieuResidence == lieuResidence)&&(identical(other.adresse, adresse) || other.adresse == adresse)&&(identical(other.genre, genre) || other.genre == genre)&&(identical(other.situationMatrimoniale, situationMatrimoniale) || other.situationMatrimoniale == situationMatrimoniale)&&(identical(other.telephone1, telephone1) || other.telephone1 == telephone1)&&(identical(other.telephone2, telephone2) || other.telephone2 == telephone2)&&(identical(other.nombreEnfants, nombreEnfants) || other.nombreEnfants == nombreEnfants)&&(identical(other.paysId, paysId) || other.paysId == paysId)&&(identical(other.regionNaissanceId, regionNaissanceId) || other.regionNaissanceId == regionNaissanceId)&&(identical(other.departementNaissanceId, departementNaissanceId) || other.departementNaissanceId == departementNaissanceId)&&(identical(other.regionResidenceId, regionResidenceId) || other.regionResidenceId == regionResidenceId)&&(identical(other.departementResidenceId, departementResidenceId) || other.departementResidenceId == departementResidenceId)&&(identical(other.aUnHandicap, aUnHandicap) || other.aUnHandicap == aUnHandicap)&&(identical(other.handicapId, handicapId) || other.handicapId == handicapId)&&const DeepCollectionEquality().equals(other.formations, formations)&&const DeepCollectionEquality().equals(other.cv, cv)&&(identical(other.photo, photo) || other.photo == photo)&&(identical(other.aDeLExperience, aDeLExperience) || other.aDeLExperience == aDeLExperience)&&const DeepCollectionEquality().equals(other.experiences, experiences)&&(identical(other.emploi1Id, emploi1Id) || other.emploi1Id == emploi1Id)&&(identical(other.emploi2Id, emploi2Id) || other.emploi2Id == emploi2Id)&&(identical(other.anneesExperience1, anneesExperience1) || other.anneesExperience1 == anneesExperience1)&&(identical(other.anneesExperience2, anneesExperience2) || other.anneesExperience2 == anneesExperience2)&&(identical(other.resumeCv, resumeCv) || other.resumeCv == resumeCv));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hashAll([runtimeType,id,dateNaissance,lieuNaissance,lieuResidence,adresse,genre,situationMatrimoniale,telephone1,telephone2,nombreEnfants,paysId,regionNaissanceId,departementNaissanceId,regionResidenceId,departementResidenceId,handicapId,const DeepCollectionEquality().hash(formations),const DeepCollectionEquality().hash(diplomes),const DeepCollectionEquality().hash(cv),photo,aDeLExperience,const DeepCollectionEquality().hash(experiences),emploi1Id,emploi2Id,anneesExperience1,anneesExperience2,resumeCv]);
+int get hashCode => Object.hashAll([runtimeType,deposee,dateNaissance,lieuNaissance,lieuResidence,adresse,genre,situationMatrimoniale,telephone1,telephone2,nombreEnfants,paysId,regionNaissanceId,departementNaissanceId,regionResidenceId,departementResidenceId,aUnHandicap,handicapId,const DeepCollectionEquality().hash(formations),const DeepCollectionEquality().hash(cv),photo,aDeLExperience,const DeepCollectionEquality().hash(experiences),emploi1Id,emploi2Id,anneesExperience1,anneesExperience2,resumeCv]);
 
 @override
 String toString() {
-  return 'Demande(id: $id, dateNaissance: $dateNaissance, lieuNaissance: $lieuNaissance, lieuResidence: $lieuResidence, adresse: $adresse, genre: $genre, situationMatrimoniale: $situationMatrimoniale, telephone1: $telephone1, telephone2: $telephone2, nombreEnfants: $nombreEnfants, paysId: $paysId, regionNaissanceId: $regionNaissanceId, departementNaissanceId: $departementNaissanceId, regionResidenceId: $regionResidenceId, departementResidenceId: $departementResidenceId, handicapId: $handicapId, formations: $formations, diplomes: $diplomes, cv: $cv, photo: $photo, aDeLExperience: $aDeLExperience, experiences: $experiences, emploi1Id: $emploi1Id, emploi2Id: $emploi2Id, anneesExperience1: $anneesExperience1, anneesExperience2: $anneesExperience2, resumeCv: $resumeCv)';
+  return 'Demande(deposee: $deposee, dateNaissance: $dateNaissance, lieuNaissance: $lieuNaissance, lieuResidence: $lieuResidence, adresse: $adresse, genre: $genre, situationMatrimoniale: $situationMatrimoniale, telephone1: $telephone1, telephone2: $telephone2, nombreEnfants: $nombreEnfants, paysId: $paysId, regionNaissanceId: $regionNaissanceId, departementNaissanceId: $departementNaissanceId, regionResidenceId: $regionResidenceId, departementResidenceId: $departementResidenceId, aUnHandicap: $aUnHandicap, handicapId: $handicapId, formations: $formations, cv: $cv, photo: $photo, aDeLExperience: $aDeLExperience, experiences: $experiences, emploi1Id: $emploi1Id, emploi2Id: $emploi2Id, anneesExperience1: $anneesExperience1, anneesExperience2: $anneesExperience2, resumeCv: $resumeCv)';
 }
 
 
@@ -874,7 +929,7 @@ abstract mixin class $DemandeCopyWith<$Res>  {
   factory $DemandeCopyWith(Demande value, $Res Function(Demande) _then) = _$DemandeCopyWithImpl;
 @useResult
 $Res call({
- int? id,@DateOnlyConverter() DateTime? dateNaissance, String lieuNaissance, String lieuResidence, String adresse, Genre? genre, SituationMatrimoniale? situationMatrimoniale, String telephone1, String telephone2, int nombreEnfants, int? paysId, int? regionNaissanceId, int? departementNaissanceId, int? regionResidenceId, int? departementResidenceId, int? handicapId, List<Formation> formations, List<FichierJoint> diplomes, List<FichierJoint> cv, FichierJoint? photo, bool aDeLExperience, List<Experience> experiences, int? emploi1Id, int? emploi2Id, int anneesExperience1, int anneesExperience2, String resumeCv
+ bool deposee,@DateOnlyConverter() DateTime? dateNaissance, String lieuNaissance, String lieuResidence, String adresse, Genre? genre, SituationMatrimoniale? situationMatrimoniale, String telephone1, String telephone2, int nombreEnfants, int? paysId, int? regionNaissanceId, int? departementNaissanceId, int? regionResidenceId, int? departementResidenceId, bool aUnHandicap, int? handicapId, List<Formation> formations, List<FichierJoint> cv, FichierJoint? photo, bool? aDeLExperience, List<Experience> experiences, int? emploi1Id, int? emploi2Id, int anneesExperience1, int anneesExperience2, String resumeCv
 });
 
 
@@ -891,10 +946,10 @@ class _$DemandeCopyWithImpl<$Res>
 
 /// Create a copy of Demande
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? dateNaissance = freezed,Object? lieuNaissance = null,Object? lieuResidence = null,Object? adresse = null,Object? genre = freezed,Object? situationMatrimoniale = freezed,Object? telephone1 = null,Object? telephone2 = null,Object? nombreEnfants = null,Object? paysId = freezed,Object? regionNaissanceId = freezed,Object? departementNaissanceId = freezed,Object? regionResidenceId = freezed,Object? departementResidenceId = freezed,Object? handicapId = freezed,Object? formations = null,Object? diplomes = null,Object? cv = null,Object? photo = freezed,Object? aDeLExperience = null,Object? experiences = null,Object? emploi1Id = freezed,Object? emploi2Id = freezed,Object? anneesExperience1 = null,Object? anneesExperience2 = null,Object? resumeCv = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? deposee = null,Object? dateNaissance = freezed,Object? lieuNaissance = null,Object? lieuResidence = null,Object? adresse = null,Object? genre = freezed,Object? situationMatrimoniale = freezed,Object? telephone1 = null,Object? telephone2 = null,Object? nombreEnfants = null,Object? paysId = freezed,Object? regionNaissanceId = freezed,Object? departementNaissanceId = freezed,Object? regionResidenceId = freezed,Object? departementResidenceId = freezed,Object? aUnHandicap = null,Object? handicapId = freezed,Object? formations = null,Object? cv = null,Object? photo = freezed,Object? aDeLExperience = freezed,Object? experiences = null,Object? emploi1Id = freezed,Object? emploi2Id = freezed,Object? anneesExperience1 = null,Object? anneesExperience2 = null,Object? resumeCv = null,}) {
   return _then(_self.copyWith(
-id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as int?,dateNaissance: freezed == dateNaissance ? _self.dateNaissance : dateNaissance // ignore: cast_nullable_to_non_nullable
+deposee: null == deposee ? _self.deposee : deposee // ignore: cast_nullable_to_non_nullable
+as bool,dateNaissance: freezed == dateNaissance ? _self.dateNaissance : dateNaissance // ignore: cast_nullable_to_non_nullable
 as DateTime?,lieuNaissance: null == lieuNaissance ? _self.lieuNaissance : lieuNaissance // ignore: cast_nullable_to_non_nullable
 as String,lieuResidence: null == lieuResidence ? _self.lieuResidence : lieuResidence // ignore: cast_nullable_to_non_nullable
 as String,adresse: null == adresse ? _self.adresse : adresse // ignore: cast_nullable_to_non_nullable
@@ -908,13 +963,13 @@ as int?,regionNaissanceId: freezed == regionNaissanceId ? _self.regionNaissanceI
 as int?,departementNaissanceId: freezed == departementNaissanceId ? _self.departementNaissanceId : departementNaissanceId // ignore: cast_nullable_to_non_nullable
 as int?,regionResidenceId: freezed == regionResidenceId ? _self.regionResidenceId : regionResidenceId // ignore: cast_nullable_to_non_nullable
 as int?,departementResidenceId: freezed == departementResidenceId ? _self.departementResidenceId : departementResidenceId // ignore: cast_nullable_to_non_nullable
-as int?,handicapId: freezed == handicapId ? _self.handicapId : handicapId // ignore: cast_nullable_to_non_nullable
+as int?,aUnHandicap: null == aUnHandicap ? _self.aUnHandicap : aUnHandicap // ignore: cast_nullable_to_non_nullable
+as bool,handicapId: freezed == handicapId ? _self.handicapId : handicapId // ignore: cast_nullable_to_non_nullable
 as int?,formations: null == formations ? _self.formations : formations // ignore: cast_nullable_to_non_nullable
-as List<Formation>,diplomes: null == diplomes ? _self.diplomes : diplomes // ignore: cast_nullable_to_non_nullable
-as List<FichierJoint>,cv: null == cv ? _self.cv : cv // ignore: cast_nullable_to_non_nullable
+as List<Formation>,cv: null == cv ? _self.cv : cv // ignore: cast_nullable_to_non_nullable
 as List<FichierJoint>,photo: freezed == photo ? _self.photo : photo // ignore: cast_nullable_to_non_nullable
-as FichierJoint?,aDeLExperience: null == aDeLExperience ? _self.aDeLExperience : aDeLExperience // ignore: cast_nullable_to_non_nullable
-as bool,experiences: null == experiences ? _self.experiences : experiences // ignore: cast_nullable_to_non_nullable
+as FichierJoint?,aDeLExperience: freezed == aDeLExperience ? _self.aDeLExperience : aDeLExperience // ignore: cast_nullable_to_non_nullable
+as bool?,experiences: null == experiences ? _self.experiences : experiences // ignore: cast_nullable_to_non_nullable
 as List<Experience>,emploi1Id: freezed == emploi1Id ? _self.emploi1Id : emploi1Id // ignore: cast_nullable_to_non_nullable
 as int?,emploi2Id: freezed == emploi2Id ? _self.emploi2Id : emploi2Id // ignore: cast_nullable_to_non_nullable
 as int?,anneesExperience1: null == anneesExperience1 ? _self.anneesExperience1 : anneesExperience1 // ignore: cast_nullable_to_non_nullable
@@ -1017,10 +1072,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? id, @DateOnlyConverter()  DateTime? dateNaissance,  String lieuNaissance,  String lieuResidence,  String adresse,  Genre? genre,  SituationMatrimoniale? situationMatrimoniale,  String telephone1,  String telephone2,  int nombreEnfants,  int? paysId,  int? regionNaissanceId,  int? departementNaissanceId,  int? regionResidenceId,  int? departementResidenceId,  int? handicapId,  List<Formation> formations,  List<FichierJoint> diplomes,  List<FichierJoint> cv,  FichierJoint? photo,  bool aDeLExperience,  List<Experience> experiences,  int? emploi1Id,  int? emploi2Id,  int anneesExperience1,  int anneesExperience2,  String resumeCv)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool deposee, @DateOnlyConverter()  DateTime? dateNaissance,  String lieuNaissance,  String lieuResidence,  String adresse,  Genre? genre,  SituationMatrimoniale? situationMatrimoniale,  String telephone1,  String telephone2,  int nombreEnfants,  int? paysId,  int? regionNaissanceId,  int? departementNaissanceId,  int? regionResidenceId,  int? departementResidenceId,  bool aUnHandicap,  int? handicapId,  List<Formation> formations,  List<FichierJoint> cv,  FichierJoint? photo,  bool? aDeLExperience,  List<Experience> experiences,  int? emploi1Id,  int? emploi2Id,  int anneesExperience1,  int anneesExperience2,  String resumeCv)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Demande() when $default != null:
-return $default(_that.id,_that.dateNaissance,_that.lieuNaissance,_that.lieuResidence,_that.adresse,_that.genre,_that.situationMatrimoniale,_that.telephone1,_that.telephone2,_that.nombreEnfants,_that.paysId,_that.regionNaissanceId,_that.departementNaissanceId,_that.regionResidenceId,_that.departementResidenceId,_that.handicapId,_that.formations,_that.diplomes,_that.cv,_that.photo,_that.aDeLExperience,_that.experiences,_that.emploi1Id,_that.emploi2Id,_that.anneesExperience1,_that.anneesExperience2,_that.resumeCv);case _:
+return $default(_that.deposee,_that.dateNaissance,_that.lieuNaissance,_that.lieuResidence,_that.adresse,_that.genre,_that.situationMatrimoniale,_that.telephone1,_that.telephone2,_that.nombreEnfants,_that.paysId,_that.regionNaissanceId,_that.departementNaissanceId,_that.regionResidenceId,_that.departementResidenceId,_that.aUnHandicap,_that.handicapId,_that.formations,_that.cv,_that.photo,_that.aDeLExperience,_that.experiences,_that.emploi1Id,_that.emploi2Id,_that.anneesExperience1,_that.anneesExperience2,_that.resumeCv);case _:
   return orElse();
 
 }
@@ -1038,10 +1093,10 @@ return $default(_that.id,_that.dateNaissance,_that.lieuNaissance,_that.lieuResid
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? id, @DateOnlyConverter()  DateTime? dateNaissance,  String lieuNaissance,  String lieuResidence,  String adresse,  Genre? genre,  SituationMatrimoniale? situationMatrimoniale,  String telephone1,  String telephone2,  int nombreEnfants,  int? paysId,  int? regionNaissanceId,  int? departementNaissanceId,  int? regionResidenceId,  int? departementResidenceId,  int? handicapId,  List<Formation> formations,  List<FichierJoint> diplomes,  List<FichierJoint> cv,  FichierJoint? photo,  bool aDeLExperience,  List<Experience> experiences,  int? emploi1Id,  int? emploi2Id,  int anneesExperience1,  int anneesExperience2,  String resumeCv)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool deposee, @DateOnlyConverter()  DateTime? dateNaissance,  String lieuNaissance,  String lieuResidence,  String adresse,  Genre? genre,  SituationMatrimoniale? situationMatrimoniale,  String telephone1,  String telephone2,  int nombreEnfants,  int? paysId,  int? regionNaissanceId,  int? departementNaissanceId,  int? regionResidenceId,  int? departementResidenceId,  bool aUnHandicap,  int? handicapId,  List<Formation> formations,  List<FichierJoint> cv,  FichierJoint? photo,  bool? aDeLExperience,  List<Experience> experiences,  int? emploi1Id,  int? emploi2Id,  int anneesExperience1,  int anneesExperience2,  String resumeCv)  $default,) {final _that = this;
 switch (_that) {
 case _Demande():
-return $default(_that.id,_that.dateNaissance,_that.lieuNaissance,_that.lieuResidence,_that.adresse,_that.genre,_that.situationMatrimoniale,_that.telephone1,_that.telephone2,_that.nombreEnfants,_that.paysId,_that.regionNaissanceId,_that.departementNaissanceId,_that.regionResidenceId,_that.departementResidenceId,_that.handicapId,_that.formations,_that.diplomes,_that.cv,_that.photo,_that.aDeLExperience,_that.experiences,_that.emploi1Id,_that.emploi2Id,_that.anneesExperience1,_that.anneesExperience2,_that.resumeCv);case _:
+return $default(_that.deposee,_that.dateNaissance,_that.lieuNaissance,_that.lieuResidence,_that.adresse,_that.genre,_that.situationMatrimoniale,_that.telephone1,_that.telephone2,_that.nombreEnfants,_that.paysId,_that.regionNaissanceId,_that.departementNaissanceId,_that.regionResidenceId,_that.departementResidenceId,_that.aUnHandicap,_that.handicapId,_that.formations,_that.cv,_that.photo,_that.aDeLExperience,_that.experiences,_that.emploi1Id,_that.emploi2Id,_that.anneesExperience1,_that.anneesExperience2,_that.resumeCv);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1058,10 +1113,10 @@ return $default(_that.id,_that.dateNaissance,_that.lieuNaissance,_that.lieuResid
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? id, @DateOnlyConverter()  DateTime? dateNaissance,  String lieuNaissance,  String lieuResidence,  String adresse,  Genre? genre,  SituationMatrimoniale? situationMatrimoniale,  String telephone1,  String telephone2,  int nombreEnfants,  int? paysId,  int? regionNaissanceId,  int? departementNaissanceId,  int? regionResidenceId,  int? departementResidenceId,  int? handicapId,  List<Formation> formations,  List<FichierJoint> diplomes,  List<FichierJoint> cv,  FichierJoint? photo,  bool aDeLExperience,  List<Experience> experiences,  int? emploi1Id,  int? emploi2Id,  int anneesExperience1,  int anneesExperience2,  String resumeCv)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool deposee, @DateOnlyConverter()  DateTime? dateNaissance,  String lieuNaissance,  String lieuResidence,  String adresse,  Genre? genre,  SituationMatrimoniale? situationMatrimoniale,  String telephone1,  String telephone2,  int nombreEnfants,  int? paysId,  int? regionNaissanceId,  int? departementNaissanceId,  int? regionResidenceId,  int? departementResidenceId,  bool aUnHandicap,  int? handicapId,  List<Formation> formations,  List<FichierJoint> cv,  FichierJoint? photo,  bool? aDeLExperience,  List<Experience> experiences,  int? emploi1Id,  int? emploi2Id,  int anneesExperience1,  int anneesExperience2,  String resumeCv)?  $default,) {final _that = this;
 switch (_that) {
 case _Demande() when $default != null:
-return $default(_that.id,_that.dateNaissance,_that.lieuNaissance,_that.lieuResidence,_that.adresse,_that.genre,_that.situationMatrimoniale,_that.telephone1,_that.telephone2,_that.nombreEnfants,_that.paysId,_that.regionNaissanceId,_that.departementNaissanceId,_that.regionResidenceId,_that.departementResidenceId,_that.handicapId,_that.formations,_that.diplomes,_that.cv,_that.photo,_that.aDeLExperience,_that.experiences,_that.emploi1Id,_that.emploi2Id,_that.anneesExperience1,_that.anneesExperience2,_that.resumeCv);case _:
+return $default(_that.deposee,_that.dateNaissance,_that.lieuNaissance,_that.lieuResidence,_that.adresse,_that.genre,_that.situationMatrimoniale,_that.telephone1,_that.telephone2,_that.nombreEnfants,_that.paysId,_that.regionNaissanceId,_that.departementNaissanceId,_that.regionResidenceId,_that.departementResidenceId,_that.aUnHandicap,_that.handicapId,_that.formations,_that.cv,_that.photo,_that.aDeLExperience,_that.experiences,_that.emploi1Id,_that.emploi2Id,_that.anneesExperience1,_that.anneesExperience2,_that.resumeCv);case _:
   return null;
 
 }
@@ -1073,10 +1128,16 @@ return $default(_that.id,_that.dateNaissance,_that.lieuNaissance,_that.lieuResid
 @JsonSerializable()
 
 class _Demande extends Demande {
-  const _Demande({this.id, @DateOnlyConverter() this.dateNaissance, this.lieuNaissance = '', this.lieuResidence = '', this.adresse = '', this.genre, this.situationMatrimoniale, this.telephone1 = '', this.telephone2 = '', this.nombreEnfants = 0, this.paysId, this.regionNaissanceId, this.departementNaissanceId, this.regionResidenceId, this.departementResidenceId, this.handicapId, final  List<Formation> formations = const <Formation>[], final  List<FichierJoint> diplomes = const <FichierJoint>[], final  List<FichierJoint> cv = const <FichierJoint>[], this.photo, this.aDeLExperience = false, final  List<Experience> experiences = const <Experience>[], this.emploi1Id, this.emploi2Id, this.anneesExperience1 = 0, this.anneesExperience2 = 0, this.resumeCv = ''}): _formations = formations,_diplomes = diplomes,_cv = cv,_experiences = experiences,super._();
+  const _Demande({this.deposee = false, @DateOnlyConverter() this.dateNaissance, this.lieuNaissance = '', this.lieuResidence = '', this.adresse = '', this.genre, this.situationMatrimoniale, this.telephone1 = '', this.telephone2 = '', this.nombreEnfants = 0, this.paysId, this.regionNaissanceId, this.departementNaissanceId, this.regionResidenceId, this.departementResidenceId, this.aUnHandicap = false, this.handicapId, final  List<Formation> formations = const <Formation>[], final  List<FichierJoint> cv = const <FichierJoint>[], this.photo, this.aDeLExperience, final  List<Experience> experiences = const <Experience>[], this.emploi1Id, this.emploi2Id, this.anneesExperience1 = 0, this.anneesExperience2 = 0, this.resumeCv = ''}): _formations = formations,_cv = cv,_experiences = experiences,super._();
   factory _Demande.fromJson(Map<String, dynamic> json) => _$DemandeFromJson(json);
 
-@override final  int? id;
+/// Vrai si le serveur détient déjà une fiche `userdata`.
+///
+/// Les quatre endpoints d'écriture sont des `PUT` idempotents : il n'y a
+/// plus de création à distinguer d'une mise à jour. Ce drapeau ne sert
+/// donc qu'à l'affichage — « dossier enregistré » plutôt que « demande
+/// en préparation ».
+@override@JsonKey() final  bool deposee;
 // --- Étape 1 : identité et résidence ---
 @override@DateOnlyConverter() final  DateTime? dateNaissance;
 @override@JsonKey() final  String lieuNaissance;
@@ -1092,10 +1153,22 @@ class _Demande extends Demande {
 @override final  int? departementNaissanceId;
 @override final  int? regionResidenceId;
 @override final  int? departementResidenceId;
+// §4 distingue **deux** champs : `handicap` (« 0 » ou « 1 ») et
+// `handicap_id`. Les fondre en un seul rendait « Oui » inexprimable tant
+// qu'aucun type n'était choisi — et donc intapable.
+@override@JsonKey() final  bool aUnHandicap;
 @override final  int? handicapId;
-// --- Étape 2 : formations et pièces jointes ---
+// --- Étape 2 : formations et justificatifs ---
+//
+// Chaque formation porte le sien (§5.1, §6.4). Il n'y a plus de tableau
+// global de diplômes : c'était l'aveu d'un serveur incapable de dire
+// quel document prouvait quelle formation.
  final  List<Formation> _formations;
-// --- Étape 2 : formations et pièces jointes ---
+// --- Étape 2 : formations et justificatifs ---
+//
+// Chaque formation porte le sien (§5.1, §6.4). Il n'y a plus de tableau
+// global de diplômes : c'était l'aveu d'un serveur incapable de dire
+// quel document prouvait quelle formation.
 @override@JsonKey() List<Formation> get formations {
   if (_formations is EqualUnmodifiableListView) return _formations;
   // ignore: implicit_dynamic_type
@@ -1103,19 +1176,12 @@ class _Demande extends Demande {
 }
 
 // Les pièces vivent sur le serveur, déposées par des appels dédiés
-// (§7.5). Elles ne partent donc **pas** dans le corps du formulaire : on
+// (§6). Elles ne partent donc **pas** dans le corps du formulaire : on
 // les garde ici pour l'affichage et la suppression.
- final  List<FichierJoint> _diplomes;
-// Les pièces vivent sur le serveur, déposées par des appels dédiés
-// (§7.5). Elles ne partent donc **pas** dans le corps du formulaire : on
-// les garde ici pour l'affichage et la suppression.
-@override@JsonKey() List<FichierJoint> get diplomes {
-  if (_diplomes is EqualUnmodifiableListView) return _diplomes;
-  // ignore: implicit_dynamic_type
-  return EqualUnmodifiableListView(_diplomes);
-}
-
  final  List<FichierJoint> _cv;
+// Les pièces vivent sur le serveur, déposées par des appels dédiés
+// (§6). Elles ne partent donc **pas** dans le corps du formulaire : on
+// les garde ici pour l'affichage et la suppression.
 @override@JsonKey() List<FichierJoint> get cv {
   if (_cv is EqualUnmodifiableListView) return _cv;
   // ignore: implicit_dynamic_type
@@ -1124,7 +1190,10 @@ class _Demande extends Demande {
 
 @override final  FichierJoint? photo;
 // --- Étape 3 : expériences ---
-@override@JsonKey() final  bool aDeLExperience;
+// `null` tant que le candidat n'a pas répondu. Un booléen par défaut
+// faisait passer l'étape pour complétée avant même qu'il l'ait ouverte :
+// le dossier affichait une réponse que personne n'avait donnée.
+@override final  bool? aDeLExperience;
  final  List<Experience> _experiences;
 @override@JsonKey() List<Experience> get experiences {
   if (_experiences is EqualUnmodifiableListView) return _experiences;
@@ -1152,16 +1221,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Demande&&(identical(other.id, id) || other.id == id)&&(identical(other.dateNaissance, dateNaissance) || other.dateNaissance == dateNaissance)&&(identical(other.lieuNaissance, lieuNaissance) || other.lieuNaissance == lieuNaissance)&&(identical(other.lieuResidence, lieuResidence) || other.lieuResidence == lieuResidence)&&(identical(other.adresse, adresse) || other.adresse == adresse)&&(identical(other.genre, genre) || other.genre == genre)&&(identical(other.situationMatrimoniale, situationMatrimoniale) || other.situationMatrimoniale == situationMatrimoniale)&&(identical(other.telephone1, telephone1) || other.telephone1 == telephone1)&&(identical(other.telephone2, telephone2) || other.telephone2 == telephone2)&&(identical(other.nombreEnfants, nombreEnfants) || other.nombreEnfants == nombreEnfants)&&(identical(other.paysId, paysId) || other.paysId == paysId)&&(identical(other.regionNaissanceId, regionNaissanceId) || other.regionNaissanceId == regionNaissanceId)&&(identical(other.departementNaissanceId, departementNaissanceId) || other.departementNaissanceId == departementNaissanceId)&&(identical(other.regionResidenceId, regionResidenceId) || other.regionResidenceId == regionResidenceId)&&(identical(other.departementResidenceId, departementResidenceId) || other.departementResidenceId == departementResidenceId)&&(identical(other.handicapId, handicapId) || other.handicapId == handicapId)&&const DeepCollectionEquality().equals(other._formations, _formations)&&const DeepCollectionEquality().equals(other._diplomes, _diplomes)&&const DeepCollectionEquality().equals(other._cv, _cv)&&(identical(other.photo, photo) || other.photo == photo)&&(identical(other.aDeLExperience, aDeLExperience) || other.aDeLExperience == aDeLExperience)&&const DeepCollectionEquality().equals(other._experiences, _experiences)&&(identical(other.emploi1Id, emploi1Id) || other.emploi1Id == emploi1Id)&&(identical(other.emploi2Id, emploi2Id) || other.emploi2Id == emploi2Id)&&(identical(other.anneesExperience1, anneesExperience1) || other.anneesExperience1 == anneesExperience1)&&(identical(other.anneesExperience2, anneesExperience2) || other.anneesExperience2 == anneesExperience2)&&(identical(other.resumeCv, resumeCv) || other.resumeCv == resumeCv));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Demande&&(identical(other.deposee, deposee) || other.deposee == deposee)&&(identical(other.dateNaissance, dateNaissance) || other.dateNaissance == dateNaissance)&&(identical(other.lieuNaissance, lieuNaissance) || other.lieuNaissance == lieuNaissance)&&(identical(other.lieuResidence, lieuResidence) || other.lieuResidence == lieuResidence)&&(identical(other.adresse, adresse) || other.adresse == adresse)&&(identical(other.genre, genre) || other.genre == genre)&&(identical(other.situationMatrimoniale, situationMatrimoniale) || other.situationMatrimoniale == situationMatrimoniale)&&(identical(other.telephone1, telephone1) || other.telephone1 == telephone1)&&(identical(other.telephone2, telephone2) || other.telephone2 == telephone2)&&(identical(other.nombreEnfants, nombreEnfants) || other.nombreEnfants == nombreEnfants)&&(identical(other.paysId, paysId) || other.paysId == paysId)&&(identical(other.regionNaissanceId, regionNaissanceId) || other.regionNaissanceId == regionNaissanceId)&&(identical(other.departementNaissanceId, departementNaissanceId) || other.departementNaissanceId == departementNaissanceId)&&(identical(other.regionResidenceId, regionResidenceId) || other.regionResidenceId == regionResidenceId)&&(identical(other.departementResidenceId, departementResidenceId) || other.departementResidenceId == departementResidenceId)&&(identical(other.aUnHandicap, aUnHandicap) || other.aUnHandicap == aUnHandicap)&&(identical(other.handicapId, handicapId) || other.handicapId == handicapId)&&const DeepCollectionEquality().equals(other._formations, _formations)&&const DeepCollectionEquality().equals(other._cv, _cv)&&(identical(other.photo, photo) || other.photo == photo)&&(identical(other.aDeLExperience, aDeLExperience) || other.aDeLExperience == aDeLExperience)&&const DeepCollectionEquality().equals(other._experiences, _experiences)&&(identical(other.emploi1Id, emploi1Id) || other.emploi1Id == emploi1Id)&&(identical(other.emploi2Id, emploi2Id) || other.emploi2Id == emploi2Id)&&(identical(other.anneesExperience1, anneesExperience1) || other.anneesExperience1 == anneesExperience1)&&(identical(other.anneesExperience2, anneesExperience2) || other.anneesExperience2 == anneesExperience2)&&(identical(other.resumeCv, resumeCv) || other.resumeCv == resumeCv));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hashAll([runtimeType,id,dateNaissance,lieuNaissance,lieuResidence,adresse,genre,situationMatrimoniale,telephone1,telephone2,nombreEnfants,paysId,regionNaissanceId,departementNaissanceId,regionResidenceId,departementResidenceId,handicapId,const DeepCollectionEquality().hash(_formations),const DeepCollectionEquality().hash(_diplomes),const DeepCollectionEquality().hash(_cv),photo,aDeLExperience,const DeepCollectionEquality().hash(_experiences),emploi1Id,emploi2Id,anneesExperience1,anneesExperience2,resumeCv]);
+int get hashCode => Object.hashAll([runtimeType,deposee,dateNaissance,lieuNaissance,lieuResidence,adresse,genre,situationMatrimoniale,telephone1,telephone2,nombreEnfants,paysId,regionNaissanceId,departementNaissanceId,regionResidenceId,departementResidenceId,aUnHandicap,handicapId,const DeepCollectionEquality().hash(_formations),const DeepCollectionEquality().hash(_cv),photo,aDeLExperience,const DeepCollectionEquality().hash(_experiences),emploi1Id,emploi2Id,anneesExperience1,anneesExperience2,resumeCv]);
 
 @override
 String toString() {
-  return 'Demande(id: $id, dateNaissance: $dateNaissance, lieuNaissance: $lieuNaissance, lieuResidence: $lieuResidence, adresse: $adresse, genre: $genre, situationMatrimoniale: $situationMatrimoniale, telephone1: $telephone1, telephone2: $telephone2, nombreEnfants: $nombreEnfants, paysId: $paysId, regionNaissanceId: $regionNaissanceId, departementNaissanceId: $departementNaissanceId, regionResidenceId: $regionResidenceId, departementResidenceId: $departementResidenceId, handicapId: $handicapId, formations: $formations, diplomes: $diplomes, cv: $cv, photo: $photo, aDeLExperience: $aDeLExperience, experiences: $experiences, emploi1Id: $emploi1Id, emploi2Id: $emploi2Id, anneesExperience1: $anneesExperience1, anneesExperience2: $anneesExperience2, resumeCv: $resumeCv)';
+  return 'Demande(deposee: $deposee, dateNaissance: $dateNaissance, lieuNaissance: $lieuNaissance, lieuResidence: $lieuResidence, adresse: $adresse, genre: $genre, situationMatrimoniale: $situationMatrimoniale, telephone1: $telephone1, telephone2: $telephone2, nombreEnfants: $nombreEnfants, paysId: $paysId, regionNaissanceId: $regionNaissanceId, departementNaissanceId: $departementNaissanceId, regionResidenceId: $regionResidenceId, departementResidenceId: $departementResidenceId, aUnHandicap: $aUnHandicap, handicapId: $handicapId, formations: $formations, cv: $cv, photo: $photo, aDeLExperience: $aDeLExperience, experiences: $experiences, emploi1Id: $emploi1Id, emploi2Id: $emploi2Id, anneesExperience1: $anneesExperience1, anneesExperience2: $anneesExperience2, resumeCv: $resumeCv)';
 }
 
 
@@ -1172,7 +1241,7 @@ abstract mixin class _$DemandeCopyWith<$Res> implements $DemandeCopyWith<$Res> {
   factory _$DemandeCopyWith(_Demande value, $Res Function(_Demande) _then) = __$DemandeCopyWithImpl;
 @override @useResult
 $Res call({
- int? id,@DateOnlyConverter() DateTime? dateNaissance, String lieuNaissance, String lieuResidence, String adresse, Genre? genre, SituationMatrimoniale? situationMatrimoniale, String telephone1, String telephone2, int nombreEnfants, int? paysId, int? regionNaissanceId, int? departementNaissanceId, int? regionResidenceId, int? departementResidenceId, int? handicapId, List<Formation> formations, List<FichierJoint> diplomes, List<FichierJoint> cv, FichierJoint? photo, bool aDeLExperience, List<Experience> experiences, int? emploi1Id, int? emploi2Id, int anneesExperience1, int anneesExperience2, String resumeCv
+ bool deposee,@DateOnlyConverter() DateTime? dateNaissance, String lieuNaissance, String lieuResidence, String adresse, Genre? genre, SituationMatrimoniale? situationMatrimoniale, String telephone1, String telephone2, int nombreEnfants, int? paysId, int? regionNaissanceId, int? departementNaissanceId, int? regionResidenceId, int? departementResidenceId, bool aUnHandicap, int? handicapId, List<Formation> formations, List<FichierJoint> cv, FichierJoint? photo, bool? aDeLExperience, List<Experience> experiences, int? emploi1Id, int? emploi2Id, int anneesExperience1, int anneesExperience2, String resumeCv
 });
 
 
@@ -1189,10 +1258,10 @@ class __$DemandeCopyWithImpl<$Res>
 
 /// Create a copy of Demande
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? dateNaissance = freezed,Object? lieuNaissance = null,Object? lieuResidence = null,Object? adresse = null,Object? genre = freezed,Object? situationMatrimoniale = freezed,Object? telephone1 = null,Object? telephone2 = null,Object? nombreEnfants = null,Object? paysId = freezed,Object? regionNaissanceId = freezed,Object? departementNaissanceId = freezed,Object? regionResidenceId = freezed,Object? departementResidenceId = freezed,Object? handicapId = freezed,Object? formations = null,Object? diplomes = null,Object? cv = null,Object? photo = freezed,Object? aDeLExperience = null,Object? experiences = null,Object? emploi1Id = freezed,Object? emploi2Id = freezed,Object? anneesExperience1 = null,Object? anneesExperience2 = null,Object? resumeCv = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? deposee = null,Object? dateNaissance = freezed,Object? lieuNaissance = null,Object? lieuResidence = null,Object? adresse = null,Object? genre = freezed,Object? situationMatrimoniale = freezed,Object? telephone1 = null,Object? telephone2 = null,Object? nombreEnfants = null,Object? paysId = freezed,Object? regionNaissanceId = freezed,Object? departementNaissanceId = freezed,Object? regionResidenceId = freezed,Object? departementResidenceId = freezed,Object? aUnHandicap = null,Object? handicapId = freezed,Object? formations = null,Object? cv = null,Object? photo = freezed,Object? aDeLExperience = freezed,Object? experiences = null,Object? emploi1Id = freezed,Object? emploi2Id = freezed,Object? anneesExperience1 = null,Object? anneesExperience2 = null,Object? resumeCv = null,}) {
   return _then(_Demande(
-id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as int?,dateNaissance: freezed == dateNaissance ? _self.dateNaissance : dateNaissance // ignore: cast_nullable_to_non_nullable
+deposee: null == deposee ? _self.deposee : deposee // ignore: cast_nullable_to_non_nullable
+as bool,dateNaissance: freezed == dateNaissance ? _self.dateNaissance : dateNaissance // ignore: cast_nullable_to_non_nullable
 as DateTime?,lieuNaissance: null == lieuNaissance ? _self.lieuNaissance : lieuNaissance // ignore: cast_nullable_to_non_nullable
 as String,lieuResidence: null == lieuResidence ? _self.lieuResidence : lieuResidence // ignore: cast_nullable_to_non_nullable
 as String,adresse: null == adresse ? _self.adresse : adresse // ignore: cast_nullable_to_non_nullable
@@ -1206,13 +1275,13 @@ as int?,regionNaissanceId: freezed == regionNaissanceId ? _self.regionNaissanceI
 as int?,departementNaissanceId: freezed == departementNaissanceId ? _self.departementNaissanceId : departementNaissanceId // ignore: cast_nullable_to_non_nullable
 as int?,regionResidenceId: freezed == regionResidenceId ? _self.regionResidenceId : regionResidenceId // ignore: cast_nullable_to_non_nullable
 as int?,departementResidenceId: freezed == departementResidenceId ? _self.departementResidenceId : departementResidenceId // ignore: cast_nullable_to_non_nullable
-as int?,handicapId: freezed == handicapId ? _self.handicapId : handicapId // ignore: cast_nullable_to_non_nullable
+as int?,aUnHandicap: null == aUnHandicap ? _self.aUnHandicap : aUnHandicap // ignore: cast_nullable_to_non_nullable
+as bool,handicapId: freezed == handicapId ? _self.handicapId : handicapId // ignore: cast_nullable_to_non_nullable
 as int?,formations: null == formations ? _self._formations : formations // ignore: cast_nullable_to_non_nullable
-as List<Formation>,diplomes: null == diplomes ? _self._diplomes : diplomes // ignore: cast_nullable_to_non_nullable
-as List<FichierJoint>,cv: null == cv ? _self._cv : cv // ignore: cast_nullable_to_non_nullable
+as List<Formation>,cv: null == cv ? _self._cv : cv // ignore: cast_nullable_to_non_nullable
 as List<FichierJoint>,photo: freezed == photo ? _self.photo : photo // ignore: cast_nullable_to_non_nullable
-as FichierJoint?,aDeLExperience: null == aDeLExperience ? _self.aDeLExperience : aDeLExperience // ignore: cast_nullable_to_non_nullable
-as bool,experiences: null == experiences ? _self._experiences : experiences // ignore: cast_nullable_to_non_nullable
+as FichierJoint?,aDeLExperience: freezed == aDeLExperience ? _self.aDeLExperience : aDeLExperience // ignore: cast_nullable_to_non_nullable
+as bool?,experiences: null == experiences ? _self._experiences : experiences // ignore: cast_nullable_to_non_nullable
 as List<Experience>,emploi1Id: freezed == emploi1Id ? _self.emploi1Id : emploi1Id // ignore: cast_nullable_to_non_nullable
 as int?,emploi2Id: freezed == emploi2Id ? _self.emploi2Id : emploi2Id // ignore: cast_nullable_to_non_nullable
 as int?,anneesExperience1: null == anneesExperience1 ? _self.anneesExperience1 : anneesExperience1 // ignore: cast_nullable_to_non_nullable

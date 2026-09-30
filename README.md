@@ -272,6 +272,75 @@ recadré avec marges pour l'icône adaptative Android (zone sûre de 66 %).
 
 ---
 
+## Contrat d'interface API v1
+
+L'app est alignée sur `CONTRAT_INTERFACE_API_MOBILE.md`. Basculer sur le vrai
+serveur ne demande qu'un drapeau :
+
+```bash
+flutter run --dart-define=USE_MOCKS=false             --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
+```
+
+### Ce que le contrat a changé
+
+Le contrat est arrivé après une première implémentation déduite de
+`MOBILE_FLUTTER.md`. Trois écarts étaient structurels, pas cosmétiques :
+
+| | Hypothèse initiale | Contrat v1 | Conséquence |
+| :-- | :-- | :-- | :-- |
+| Réponses | corps JSON brut | `{success, message, data}` | déballé une fois pour toutes dans `ApiClient` |
+| Écriture du dossier | **un** `PUT` portant l'agrégat entier | **quatre** `PUT`, un par étape | une étape ne peut plus en effacer une autre |
+| Lien formation ↔ diplôme | impossible côté serveur | `formation_index` (§6.4), `diplome_file_url` (§5.1) | le lien est natif ; le contournement par nom de fichier a été supprimé |
+
+Le troisième point mérite un mot : faute de colonne pour le porter, le rang de
+la formation avait dû être encodé dans le **nom du fichier déposé**. Le
+contrat rend cette gymnastique inutile — `Formation.justificatif` est
+désormais un champ à part entière, et `lien_justificatif.dart` a disparu.
+
+### Correspondance des endpoints
+
+| Contrat | Implémentation |
+| :-- | :-- |
+| `POST /auth/register`, `/auth/login` | `HttpAuthApi` — un jeton est émis **dès l'inscription** |
+| `GET /auth/me`, `POST /auth/logout` | idem ; `profile_summary.has_userdata` alimente `Utilisateur.hasProfile` |
+| `POST /auth/forgot-password` | email seul |
+| `GET /reference/all` | `HttpReferenceApi` + `ReferentielMapper` |
+| `GET /candidat/profile` | `DemandeMapper.depuisApi` |
+| `PUT /candidat/{identity,formations,experiences,target-jobs}` | `DemandeMapper.identite / formations / experiences / voeux` |
+| `POST /candidat/files/{photo,cv,diplome}`, `DELETE .../cv` | `HttpDemandeApi` |
+
+Plafonds et formats suivent le contrat, et diffèrent par nature de pièce :
+photo 4 Mo (JPG/PNG/WEBP), documents 8 Mo. **Le justificatif de diplôme
+accepte les images** : un candidat peut photographier son diplôme, ce que
+l'ancienne règle refusait.
+
+### Points à trancher avec l'équipe backend
+
+1. **Quatre écrans sans endpoint.** Vérification d'email, saisie du code,
+   changement de mot de passe et test de disponibilité d'un identifiant
+   n'existent pas en v1. Les écrans fonctionnent sur le faux backend ;
+   `HttpAuthApi` les refuse d'un message explicite plutôt que d'appeler une
+   route imaginaire. Le routeur, lui, retient toujours un compte
+   `enabled: false` sur l'écran de vérification — **sans route pour
+   l'activer, ce compte est bloqué**. C'est le point le plus urgent.
+2. **`GET /candidat/profile` ne renvoie pas `hasExperience`.** Une liste
+   d'expériences vide ne permet pas de distinguer « je n'en ai pas » de « je
+   n'ai pas encore répondu ». L'app laisse l'étape 3 ouverte plutôt que
+   d'inventer une réponse.
+3. **`academic_id` « sans diplôme » vaut 14 ou 20 selon la source.** Les deux
+   sont reconnus en lecture ; l'écriture envoie la chaîne `"sansdiplome"`,
+   seule forme que les deux versions interprètent pareil.
+4. **Aucune suppression de justificatif de diplôme** (seul le CV en a une).
+   Retirer une pièce se fait donc en n'envoyant plus son
+   `existing_diplome_file` au `PUT` suivant.
+5. **Le §4 ne donne aucun exemple de réponse** pour `/reference/all` :
+   `ReferentielMapper` accepte plusieurs orthographes de clés en attendant
+   une trace réelle. À figer dès le premier appel abouti.
+6. **Pas de route « pays »** alors que la région « Hors Sénégal » en suppose
+   une. Le champ est masqué tant que la liste est vide.
+7. **`recruted` n'est pas renvoyé** : le bandeau « Recruté » de l'accueil
+   reste muet.
+
 ## Couverture du cadrage
 
 Le parcours du §3.1 est couvert de bout en bout : inscription, activation par

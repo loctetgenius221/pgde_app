@@ -60,8 +60,8 @@ void main() {
     await tester.tap(find.text('Commencer'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Bon retour'), findsOneWidget);
-    expect(find.text("Nom d'utilisateur"), findsOneWidget);
+    expect(find.text('Votre espace candidat'), findsOneWidget);
+    expect(find.text('Email ou nom d’utilisateur'), findsOneWidget);
     // §3.3 : on ne se connecte jamais avec l'email.
     expect(find.text('Adresse email'), findsNothing);
   });
@@ -72,7 +72,7 @@ void main() {
     await _lancer(tester, prefs: <String, Object>{'onboarding_vu': true});
     await tester.pumpAndSettle();
 
-    expect(find.text('Bon retour'), findsOneWidget);
+    expect(find.text('Votre espace candidat'), findsOneWidget);
     expect(find.text('Une demande, un dossier'), findsNothing);
   });
 
@@ -89,9 +89,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Sans plafond, le champ s'étirerait sur toute la largeur de l'écran.
-    final Size champ = tester.getSize(
-      find.byType(TextFormField).first,
-    );
+    final Size champ = tester.getSize(find.byType(TextFormField).first);
     expect(champ.width, lessThanOrEqualTo(LargeurMax.formulaire));
     expect(champ.width, greaterThan(300));
   });
@@ -121,7 +119,11 @@ void main() {
     final Rect logo = tester.getRect(find.byType(Image));
     final Rect sigle = tester.getRect(find.text('PGDE'));
 
-    expect(sigle.left, greaterThan(logo.right - 1), reason: 'le sigle est à droite du logo');
+    expect(
+      sigle.left,
+      greaterThan(logo.right - 1),
+      reason: 'le sigle est à droite du logo',
+    );
     // Même ligne : les deux rectangles se chevauchent verticalement.
     expect(logo.top, lessThan(sigle.bottom));
     expect(sigle.top, lessThan(logo.bottom));

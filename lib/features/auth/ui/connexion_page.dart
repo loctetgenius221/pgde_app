@@ -19,13 +19,13 @@ class ConnexionPage extends ConsumerStatefulWidget {
 class _ConnexionPageState extends ConsumerState<ConnexionPage>
     with FormSubmission {
   final _formKey = GlobalKey<FormState>();
-  final _username = TextEditingController();
+  final _identifiant = TextEditingController();
   final _password = TextEditingController();
   bool _motDePasseVisible = false;
 
   @override
   void dispose() {
-    _username.dispose();
+    _identifiant.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -37,7 +37,10 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
     await soumettre(
       () => ref
           .read(authControllerProvider.notifier)
-          .connexion(username: _username.text.trim(), password: _password.text),
+          .connexion(
+            identifiant: _identifiant.text.trim(),
+            password: _password.text,
+          ),
     );
   }
 
@@ -70,38 +73,32 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                       ),
                     ),
                     const SizedBox(height: Espace.lg),
+
                     Text(
-                      'Bon retour',
+                      'Votre espace candidat',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.displaySmall,
-                    ),
-                    const SizedBox(height: Espace.xs),
-                    Text(
-                      'Connectez-vous pour déposer ou compléter votre demande '
-                      "d'emploi.",
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      style: theme.textTheme.headlineSmall,
                     ),
                     const SizedBox(height: Espace.xl),
 
                     BandeauErreur(erreurGlobale),
 
                     TextFormField(
-                      controller: _username,
-                      // §3.3 : l'identifiant de connexion est le nom
-                      // d'utilisateur, jamais l'email.
+                      controller: _identifiant,
+                      // §3.2 : le serveur accepte l'email **ou** le nom
+                      // d'utilisateur sur le même champ. Imposer l'un des
+                      // deux ferait échouer la moitié des candidats sur une
+                      // règle qui n'existe pas.
                       decoration: InputDecoration(
-                        labelText: "Nom d'utilisateur",
+                        labelText: 'Email ou nom d’utilisateur',
                         prefixIcon: const PrefixeChamp(Icones.identifiant),
-                        errorText: erreurDuChamp('username'),
+                        errorText: erreurDuChamp('login'),
                       ),
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
                       autofillHints: const <String>[AutofillHints.username],
                       validator: (v) => (v == null || v.trim().isEmpty)
-                          ? "Saisissez votre nom d'utilisateur"
+                          ? 'Saisissez votre identifiant'
                           : null,
                     ),
                     const SizedBox(height: Espace.sm),

@@ -29,7 +29,8 @@ abstract class Departement with _$Departement {
 abstract class Secteur with _$Secteur {
   const factory Secteur({required int id, required String libelle}) = _Secteur;
 
-  factory Secteur.fromJson(Map<String, dynamic> json) => _$SecteurFromJson(json);
+  factory Secteur.fromJson(Map<String, dynamic> json) =>
+      _$SecteurFromJson(json);
 }
 
 @freezed
@@ -45,14 +46,29 @@ abstract class Emploi with _$Emploi {
 
 @freezed
 abstract class Academic with _$Academic {
-  const factory Academic({required int id, required String libelle}) = _Academic;
+  const factory Academic({required int id, required String libelle}) =
+      _Academic;
 
   factory Academic.fromJson(Map<String, dynamic> json) =>
       _$AcademicFromJson(json);
 
-  /// §6.1 B4 — « sans diplôme » vaut **14**, jamais 20 : l'id 20 n'existe pas
-  /// en base, le contrôleur web écrit une clé étrangère morte.
+  /// « Sans diplôme ».
+  ///
+  /// Le contrat §5.3 accepte `academic_id: "sansdiplome"` **ou** `20`, là où
+  /// l'analyse de la base donnait **14** (l'id 20 y était une clé étrangère
+  /// morte). Les deux sont donc reconnus en lecture, et l'écriture passe par
+  /// la chaîne `"sansdiplome"` : c'est la seule forme que les deux versions
+  /// du serveur interprètent identiquement.
   static const int sansDiplomeId = 14;
+
+  /// L'autre identifiant admis par le contrat pour « sans diplôme ».
+  static const int sansDiplomeIdContrat = 20;
+
+  /// Valeur envoyée au serveur pour « sans diplôme » (§5.3).
+  static const String sansDiplomeWire = 'sansdiplome';
+
+  static bool estSansDiplome(int id) =>
+      id == sansDiplomeId || id == sansDiplomeIdContrat;
 
   /// §5.2 — la table n'est ni ordonnée ni contiguë. L'ordre d'affichage est
   /// imposé ici, jamais déduit de l'id.
@@ -77,7 +93,8 @@ abstract class Academic with _$Academic {
 
 @freezed
 abstract class Handicap with _$Handicap {
-  const factory Handicap({required int id, required String libelle}) = _Handicap;
+  const factory Handicap({required int id, required String libelle}) =
+      _Handicap;
 
   factory Handicap.fromJson(Map<String, dynamic> json) =>
       _$HandicapFromJson(json);
@@ -97,7 +114,9 @@ abstract class Pays with _$Pays {
 @freezed
 abstract class Referentiel with _$Referentiel {
   const factory Referentiel({
-    required String version,
+    /// Absente du contrat v1 : vide tant que le serveur n'en publie pas.
+    /// Elle sert au cache local, qui doit savoir se périmer.
+    @Default('') String version,
     @Default(<Region>[]) List<Region> regions,
     @Default(<Departement>[]) List<Departement> departements,
     @Default(<Secteur>[]) List<Secteur> secteurs,

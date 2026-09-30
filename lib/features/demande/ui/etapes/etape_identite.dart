@@ -38,12 +38,14 @@ class EtapeIdentite extends StatelessWidget {
       SectionPhoto(demande: demande),
 
       const TitreSection('État civil'),
+      const LegendeObligatoire(),
 
       ChampDate(
         // Pas d'icône de tête : `ChampDate` pose déjà un calendrier en fin de
         // champ, qui est l'affordance du sélecteur. Deux fois la même icône
         // sur une ligne ne dit rien de plus.
         libelle: 'Date de naissance',
+        obligatoire: true,
         valeur: demande.dateNaissance,
         erreur: erreurs?.errorFor('datenaiss'),
         onChange: (v) => modifier((d) => d.copyWith(dateNaissance: v)),
@@ -52,6 +54,7 @@ class EtapeIdentite extends StatelessWidget {
 
       ChoixSegmente<Genre>(
         libelle: 'Genre',
+        obligatoire: true,
         valeur: demande.genre,
         options: Genre.values,
         // `wire` porte la valeur exacte attendue en base (§4) : afficher autre
@@ -64,6 +67,7 @@ class EtapeIdentite extends StatelessWidget {
 
       ChampTexte(
         libelle: 'Lieu de naissance',
+        obligatoire: true,
         icone: Icones.lieu,
         valeur: demande.lieuNaissance,
         erreur: erreurs?.errorFor('lieunaiss'),
@@ -106,6 +110,7 @@ class EtapeIdentite extends StatelessWidget {
 
       ChampTexte(
         libelle: 'Lieu de résidence',
+        obligatoire: true,
         icone: Icones.lieu,
         valeur: demande.lieuResidence,
         erreur: erreurs?.errorFor('lieuresidence'),
@@ -134,7 +139,11 @@ class EtapeIdentite extends StatelessWidget {
 
       // §5.1 : la région 15 n'a aucun département rattaché. On demande le pays
       // à la place, jamais les deux.
-      if (demande.resideHorsSenegal)
+      // §5.2 n'a pas de `country_id`, et le contrat n'expose aucune route
+      // « pays » : sans référentiel, le sélecteur serait vide. On le masque
+      // plutôt que d'ouvrir une liste sur du néant — il réapparaîtra seul le
+      // jour où le serveur publiera la liste.
+      if (demande.resideHorsSenegal && referentiel.countries.isNotEmpty)
         ChampSelection<Pays>(
           libelle: 'Pays de résidence',
           icone: Icones.region,
@@ -171,6 +180,7 @@ class EtapeIdentite extends StatelessWidget {
 
       ChampTexte(
         libelle: 'Téléphone principal',
+        obligatoire: true,
         icone: Icones.telephone,
         valeur: demande.telephone1,
         clavier: TextInputType.phone,
@@ -225,15 +235,19 @@ class EtapeIdentite extends StatelessWidget {
 
       ChoixSegmente<bool>(
         libelle: 'Êtes-vous en situation de handicap ?',
-        valeur: demande.handicapId != null,
+        valeur: demande.aUnHandicap,
         options: const <bool>[false, true],
         etiquette: (oui) => oui ? 'Oui' : 'Non',
         // « Non » efface le type : le serveur reçoit alors `handicap: "0"`,
         // qui force `handicap_id` à null (§4).
-        onChange: (oui) =>
-            modifier((d) => d.copyWith(handicapId: oui ? d.handicapId : null)),
+        onChange: (oui) => modifier(
+          (d) => d.copyWith(
+            aUnHandicap: oui,
+            handicapId: oui ? d.handicapId : null,
+          ),
+        ),
       ),
-      if (demande.handicapId != null || _handicapDeclare) ...<Widget>[
+      if (demande.aUnHandicap) ...<Widget>[
         const SizedBox(height: Espace.sm),
         ChampSelection<Handicap>(
           libelle: 'Type de handicap',
@@ -247,8 +261,6 @@ class EtapeIdentite extends StatelessWidget {
       ],
     ],
   );
-
-  bool get _handicapDeclare => demande.handicapId != null;
 
   Region? _region(int? id) => _parId(referentiel.regions, id, (r) => r.id);
   Departement? _departement(int? id) =>

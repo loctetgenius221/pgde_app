@@ -30,7 +30,8 @@ class BrouillonStore {
     }
   }
 
-  Future<void> ecrire(Demande demande) => _store.writeJson(_cle, demande.toJson());
+  Future<void> ecrire(Demande demande) =>
+      _store.writeJson(_cle, demande.toJson());
 
   Future<void> purger() => _store.remove(_cle);
 }

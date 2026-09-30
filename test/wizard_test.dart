@@ -18,51 +18,69 @@ class _FauxDemandeApi implements DemandeApi {
 
   Demande? dossier;
   ApiException? erreurAEnvoyer;
+
+  /// Les quatre étapes enregistrées, dans l'ordre où elles sont parties.
+  final List<String> etapesEnvoyees = <String>[];
+
+  /// Dernier dossier soumis, toutes étapes confondues.
   Demande? dernierEnvoi;
+
+  /// Rangs de formation pour lesquels un justificatif a été déposé (§6.4).
+  final List<int> diplomesDeposes = <int>[];
 
   @override
   Future<Demande?> mien() async => dossier;
 
   @override
-  Future<Demande> creer(Demande demande) async => _envoyer(demande, id: 1);
+  Future<void> enregistrerIdentite(Demande d) => _envoyer(d, 'identity');
 
   @override
-  Future<Demande> mettreAJour(Demande demande) async =>
-      _envoyer(demande, id: demande.id);
-
-  // Les pièces jointes ne sont pas l'objet de ces tests : on enregistre ce qui
-  // est demandé, sans toucher au dossier.
-  List<File> photosDeposees = <File>[];
+  Future<void> enregistrerFormations(Demande d) => _envoyer(d, 'formations');
 
   @override
-  Future<Demande> deposerPhoto(File fichier) async {
-    photosDeposees.add(fichier);
-    return dossier ?? const Demande();
-  }
+  Future<void> enregistrerExperiences(Demande d) => _envoyer(d, 'experiences');
 
   @override
-  Future<Demande> deposerDocuments({
-    required TypeFichier type,
-    required List<File> fichiers,
-  }) async => dossier ?? const Demande();
+  Future<void> enregistrerVoeux(Demande d) => _envoyer(d, 'target-jobs');
 
-  @override
-  Future<Demande> supprimerFichier({
-    required TypeFichier type,
-    required String chemin,
-  }) async => dossier ?? const Demande();
-
-  Demande _envoyer(Demande demande, {int? id}) {
+  Future<void> _envoyer(Demande demande, String etape) async {
     dernierEnvoi = demande;
     final ApiException? erreur = erreurAEnvoyer;
     if (erreur != null) throw erreur;
-    return dossier = demande.copyWith(id: id);
+    etapesEnvoyees.add(etape);
+    dossier = demande.copyWith(deposee: true);
   }
+
+  // Les pièces ne sont pas l'objet de ces tests : on note ce qui est
+  // demandé, sans toucher au dossier.
+  final List<File> photosDeposees = <File>[];
+
+  @override
+  Future<FichierJoint> deposerPhoto(File fichier) async {
+    photosDeposees.add(fichier);
+    return const FichierJoint(chemin: 'p.jpg', url: 'http://x/p.jpg');
+  }
+
+  @override
+  Future<FichierJoint> deposerDiplome({
+    required File fichier,
+    required int formationIndex,
+  }) async {
+    diplomesDeposes.add(formationIndex);
+    return const FichierJoint(chemin: 'd.pdf', url: 'http://x/d.pdf');
+  }
+
+  @override
+  Future<FichierJoint> deposerCv(File fichier) async =>
+      const FichierJoint(chemin: 'cv.pdf', url: 'http://x/cv.pdf');
+
+  @override
+  Future<void> supprimerCv() async {}
 }
 
 /// Dossier minimal accepté par le serveur (§4, récapitulatif).
 final Demande _dossierValide = Demande(
-  id: 42,
+  deposee: true,
   dateNaissance: DateTime(1998, 4, 12),
   lieuNaissance: 'Dakar',
   lieuResidence: 'Pikine',
@@ -82,6 +100,15 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
     ..physicalSize = const Size(400, 860)
     ..devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
+
+  // L'accueil porte l'avatar de l'assistant, dont l'animation de repos
+  // tourne sans fin : `pumpAndSettle` attendrait indéfiniment une scène qui
+  // ne se stabilise jamais. On demande donc le mouvement réduit — ce qui
+  // éprouve au passage le chemin que suit un utilisateur ayant désactivé les
+  // animations sur son appareil.
+  tester.platformDispatcher.accessibilityFeaturesTestValue =
+      const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
 
   SharedPreferences.setMockInitialValues(<String, Object>{
     'onboarding_vu': true,
@@ -126,7 +153,9 @@ void main() {
     await _ouvrirLeWizard(tester);
 
     expect(find.text('Identité et résidence'), findsOneWidget);
-    expect(find.text('Date de naissance'), findsWidgets);
+    // Le libellé d'un champ obligatoire est un `Text.rich` (astérisque) :
+    // `find.text` ne le verrait pas.
+    expect(find.textContaining('Date de naissance'), findsWidgets);
 
     await tester.tap(find.text('Continuer'));
     await tester.pumpAndSettle();
@@ -145,6 +174,27 @@ void main() {
     expect(find.text('Continuer'), findsNothing);
   });
 
+  testWidgets('répondre « oui » au handicap ouvre le choix du type', (
+    tester,
+  ) async {
+    await _ouvrirLeWizard(tester);
+
+    // La question est en bas de l'étape 1.
+    await tester.scrollUntilVisible(
+      find.text('Êtes-vous en situation de handicap ?'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Type de handicap'), findsNothing);
+
+    await tester.tap(find.text('Oui'));
+    await tester.pumpAndSettle();
+
+    // Le geste doit avoir un effet **avant** qu'un type soit choisi : c'est
+    // exactement ce qui ne marchait pas.
+    expect(find.text('Type de handicap'), findsOneWidget);
+  });
+
   testWidgets('enregistrer un dossier vide renvoie sur l’étape fautive', (
     tester,
   ) async {
@@ -160,10 +210,7 @@ void main() {
     // Rien n'est parti au serveur, et on est revenu à l'étape 1.
     expect(api.dernierEnvoi, isNull);
     expect(find.text('Identité et résidence'), findsOneWidget);
-    expect(
-      find.textContaining('Complétez l’étape'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Complétez l’étape'), findsOneWidget);
   });
 
   testWidgets('un 422 renvoie sur l’étape qui porte le champ (§8.7)', (

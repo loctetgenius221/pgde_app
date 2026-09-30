@@ -74,7 +74,10 @@ const List<Secteur> _secteurs = <Secteur>[
   Secteur(id: 5, libelle: 'Education / Enseignement'),
   Secteur(id: 6, libelle: 'Finances'),
   Secteur(id: 7, libelle: 'Gestion / Comptabilité'),
-  Secteur(id: 8, libelle: 'Industrie / Mines / Energies / Electricité / Hydraulique'),
+  Secteur(
+    id: 8,
+    libelle: 'Industrie / Mines / Energies / Electricité / Hydraulique',
+  ),
   Secteur(id: 9, libelle: 'Informatique / Télécom / Téléservices'),
   Secteur(id: 10, libelle: 'Menuiserie / Peinture / Plomberie / Maçonnerie'),
   Secteur(id: 11, libelle: 'Planification'),

@@ -19,6 +19,13 @@ abstract final class AppTheme {
     final ColorScheme scheme = _scheme(brightness);
     final TextTheme texte = _typographie(scheme);
 
+    /// Fond de tout ce qui surgit par-dessus la page — feuilles, menus,
+    /// dialogues. Identique à la surface des cartes, pour qu'un élément
+    /// flottant ne se distingue que par son ombre.
+    final Color surfaceFlottante = clair
+        ? AppColors.surfaceClaire
+        : AppColors.surfaceSombre;
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
@@ -53,8 +60,14 @@ abstract final class AppTheme {
         ),
         // Laisse respirer les icônes de début et de fin de champ : collées au
         // bord, elles entreraient dans la courbe de la pilule.
-        prefixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
-        suffixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 52,
+          minHeight: 52,
+        ),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 52,
+          minHeight: 52,
+        ),
         hintStyle: texte.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         labelStyle: texte.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         floatingLabelStyle: texte.bodySmall?.copyWith(color: scheme.primary),
@@ -113,6 +126,58 @@ abstract final class AppTheme {
         contentPadding: const EdgeInsets.symmetric(horizontal: Espace.md),
       ),
 
+      // --- Surfaces flottantes ---
+      //
+      // Material 3 sert ces surfaces depuis les rôles `surfaceContainer*`,
+      // que `fromSeed` teinte de vert. Une feuille de sélection ou un menu
+      // arrivaient donc en vert pâle, alors que la page qu'ils recouvrent est
+      // blanche : l'élément *surgissant* paraissait moins net que le fond.
+      // On les ramène tous sur la même surface, et on coupe la teinte
+      // d'élévation qui la reverdirait.
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surfaceFlottante,
+        modalBackgroundColor: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: scheme.outlineVariant,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(Rayon.lg)),
+        ),
+      ),
+
+      popupMenuTheme: PopupMenuThemeData(
+        color: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Rayon.md),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll<Color>(surfaceFlottante),
+          surfaceTintColor: const WidgetStatePropertyAll<Color>(
+            Colors.transparent,
+          ),
+        ),
+      ),
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+      ),
+
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+      ),
+
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: surfaceFlottante,
+      ),
+
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant,
         thickness: 1,
@@ -124,7 +189,9 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(Rayon.md),
         ),
-        contentTextStyle: texte.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+        contentTextStyle: texte.bodyMedium?.copyWith(
+          color: scheme.onInverseSurface,
+        ),
       ),
 
       progressIndicatorTheme: ProgressIndicatorThemeData(

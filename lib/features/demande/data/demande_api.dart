@@ -10,41 +10,51 @@ import '../domain/demande.dart';
 import 'demande_mapper.dart';
 import 'demande_mock_api.dart';
 
-/// Le dossier du candidat — §7.5.
+/// Le dossier du candidat — modules 3 et 4 du contrat d'interface.
 ///
 /// Aucun identifiant dans les URL : le dossier est déduit de l'utilisateur
 /// authentifié. Cela **supprime par construction** la classe de failles IDOR
-/// corrigée à la main dans le contrôleur web (SEC-02).
+/// corrigée à la main dans le contrôleur web.
+///
+/// L'écriture est découpée en quatre `PUT`, un par étape (§5.2 à §5.5).
+/// C'est un changement de fond par rapport au `PUT` global précédent :
+/// enregistrer une étape ne peut plus effacer les autres, et un 422 désigne
+/// sans ambiguïté l'étape fautive — c'est celle qu'on venait d'envoyer.
 abstract interface class DemandeApi {
-  /// Le dossier de l'utilisateur, ou `null` s'il n'en a pas encore.
+  /// §5.1 — le profil complet, ou `null` si le candidat n'a encore rien
+  /// rempli.
   Future<Demande?> mien();
 
-  /// Création — une seule fois par compte (`utilisateur_id` UNIQUE, §2.1).
-  Future<Demande> creer(Demande demande);
+  Future<void> enregistrerIdentite(Demande demande);
 
-  Future<Demande> mettreAJour(Demande demande);
+  Future<void> enregistrerFormations(Demande demande);
 
-  // --- Pièces jointes (§7.5) ---
+  Future<void> enregistrerExperiences(Demande demande);
+
+  Future<void> enregistrerVoeux(Demande demande);
+
+  // --- Pièces jointes (§6) ---
   //
-  // Elles vivent sur la même ressource `/demande` et dans le même dossier
-  // serveur : les séparer dans une seconde interface obligerait les deux
-  // implémentations à se partager un état. La cohésion l'emporte ici sur le
-  // découpage.
+  // Trois routes dédiées, une par nature de pièce. Elles renvoient la pièce
+  // déposée, pas le dossier entier : on n'en adopte donc que ce qui change.
 
-  /// Remplace la photo de profil. Le serveur n'en garde qu'une (§2.3).
-  Future<Demande> deposerPhoto(File fichier);
+  /// §6.1 — remplace la photo de profil. Le serveur n'en garde qu'une.
+  Future<FichierJoint> deposerPhoto(File fichier);
 
-  /// Ajoute des diplômes ou des CV au dossier.
-  Future<Demande> deposerDocuments({
-    required TypeFichier type,
-    required List<File> fichiers,
+  /// §6.4 — justificatif d'une formation. [formationIndex] est le rang de la
+  /// formation dans la liste envoyée à `PUT /candidat/formations`.
+  Future<FichierJoint> deposerDiplome({
+    required File fichier,
+    required int formationIndex,
   });
 
-  /// Retire une pièce. [chemin] est le `path` renvoyé par l'API, jamais l'URL.
-  Future<Demande> supprimerFichier({
-    required TypeFichier type,
-    required String chemin,
-  });
+  /// §6.2 — le CV. Retiré de la saisie aujourd'hui, la route reste couverte
+  /// pour que le rétablir ne coûte qu'un écran.
+  Future<FichierJoint> deposerCv(File fichier);
+
+  /// §6.3 — le contrat n'expose **aucune suppression de justificatif de
+  /// diplôme** : seul le CV peut être retiré.
+  Future<void> supprimerCv();
 }
 
 class HttpDemandeApi implements DemandeApi {
@@ -55,77 +65,122 @@ class HttpDemandeApi implements DemandeApi {
   @override
   Future<Demande?> mien() async {
     try {
-      return DemandeMapper.depuisApi(await _client.get('/demande') as Json);
+      final Object? data = await _client.get('/candidat/profile');
+      if (data is! Map) return null;
+      return DemandeMapper.depuisApi(data.cast<String, dynamic>());
     } on ApiException catch (e) {
-      // 404 n'est pas une erreur : c'est un candidat qui n'a rien déposé.
+      // 404 n'est pas une erreur : c'est un candidat qui n'a rien rempli.
       if (e.isNotFound) return null;
       rethrow;
     }
   }
 
   @override
-  Future<Demande> creer(Demande demande) async => DemandeMapper.depuisApi(
-    await _client.post('/demande', body: DemandeMapper.versCorps(demande))
-        as Json,
+  Future<void> enregistrerIdentite(Demande demande) => _client.put(
+    '/candidat/identity',
+    body: DemandeMapper.identite(demande),
   );
 
   @override
-  Future<Demande> mettreAJour(Demande demande) async => DemandeMapper.depuisApi(
-    await _client.put('/demande', body: DemandeMapper.versCorps(demande))
-        as Json,
+  Future<void> enregistrerFormations(Demande demande) => _client.put(
+    '/candidat/formations',
+    body: DemandeMapper.formations(demande),
   );
 
   @override
-  Future<Demande> deposerPhoto(File fichier) async {
+  Future<void> enregistrerExperiences(Demande demande) => _client.put(
+    '/candidat/experiences',
+    body: DemandeMapper.experiences(demande),
+  );
+
+  @override
+  Future<void> enregistrerVoeux(Demande demande) => _client.put(
+    '/candidat/target-jobs',
+    body: DemandeMapper.voeux(demande),
+  );
+
+  @override
+  Future<FichierJoint> deposerPhoto(File fichier) async {
+    final Json data = await _envoyer(
+      '/candidat/files/photo',
+      champ: 'photo_profil',
+      fichier: fichier,
+    );
+    return FichierJoint(
+      chemin: _texte(data['photo_profil_url']),
+      url: _texte(data['photo_profil_url']),
+      nom: _nomDe(fichier),
+    );
+  }
+
+  @override
+  Future<FichierJoint> deposerDiplome({
+    required File fichier,
+    required int formationIndex,
+  }) async {
+    final Json data = await _envoyer(
+      '/candidat/files/diplome',
+      champ: 'diplome_file',
+      fichier: fichier,
+      // §6.4 — c'est **ce champ** qui rattache le document à sa formation.
+      champsSupplementaires: <String, dynamic>{
+        'formation_index': formationIndex,
+      },
+    );
+    return FichierJoint(
+      chemin: _texte(data['file_path']),
+      url: _texte(data['file_url']),
+      nom: _nomDe(fichier),
+      taille: fichier.existsSync() ? fichier.lengthSync() : null,
+    );
+  }
+
+  @override
+  Future<FichierJoint> deposerCv(File fichier) async {
+    final Json data = await _envoyer(
+      '/candidat/files/cv',
+      champ: 'cv_file',
+      fichier: fichier,
+    );
+    return FichierJoint(
+      chemin: _texte(data['cv_url']),
+      url: _texte(data['cv_url']),
+      nom: _texte(data['cv_file_name']),
+      taille: fichier.existsSync() ? fichier.lengthSync() : null,
+    );
+  }
+
+  @override
+  Future<void> supprimerCv() => _client.delete('/candidat/files/cv');
+
+  Future<Json> _envoyer(
+    String chemin, {
+    required String champ,
+    required File fichier,
+    Json? champsSupplementaires,
+  }) async {
     final FormData corps = FormData();
+    if (champsSupplementaires != null) {
+      for (final MapEntry<String, dynamic> e in champsSupplementaires.entries) {
+        corps.fields.add(MapEntry(e.key, e.value.toString()));
+      }
+    }
     corps.files.add(
       MapEntry(
-        'photo_profil',
+        champ,
         await MultipartFile.fromFile(fichier.path, filename: _nomDe(fichier)),
       ),
     );
-    return DemandeMapper.depuisApi(
-      await _client.post('/demande/photo', body: corps) as Json,
-    );
+
+    final Object? data = await _client.post(chemin, body: corps);
+    return data is Map ? data.cast<String, dynamic>() : const <String, dynamic>{};
   }
 
-  @override
-  Future<Demande> deposerDocuments({
-    required TypeFichier type,
-    required List<File> fichiers,
-  }) async {
-    // §8.6 : Laravel attend la **même clé répétée**, suffixée de crochets —
-    // `diplome_file[]`, et non un tableau JSON.
-    final String cle = '${type.wire}_file[]';
-    final FormData corps = FormData();
-    for (final File fichier in fichiers) {
-      corps.files.add(
-        MapEntry(
-          cle,
-          await MultipartFile.fromFile(fichier.path, filename: _nomDe(fichier)),
-        ),
-      );
-    }
-    return DemandeMapper.depuisApi(
-      await _client.post('/demande/files', body: corps) as Json,
-    );
-  }
-
-  @override
-  Future<Demande> supprimerFichier({
-    required TypeFichier type,
-    required String chemin,
-  }) async => DemandeMapper.depuisApi(
-    await _client.delete(
-          '/demande/files',
-          body: <String, dynamic>{'type': type.wire, 'path': chemin},
-        )
-        as Json,
-  );
+  static String _texte(Object? valeur) => valeur?.toString() ?? '';
 
   /// Nom de fichier, quel que soit le séparateur de la plateforme.
   static String _nomDe(File fichier) =>
-      fichier.path.split(RegExp(r'[\/]')).last;
+      fichier.path.split(RegExp(r'[\\/]')).last;
 }
 
 final demandeApiProvider = Provider<DemandeApi>(

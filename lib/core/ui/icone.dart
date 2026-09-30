@@ -79,9 +79,9 @@ class PrefixeChamp extends StatelessWidget {
       icone,
       taille: StyleIcone.prefixe,
       epaisseur: StyleIcone.traitChamp,
-      couleur: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
-        alpha: StyleIcone.opaciteChamp,
-      ),
+      couleur: Theme.of(
+        context,
+      ).colorScheme.onSurfaceVariant.withValues(alpha: StyleIcone.opaciteChamp),
     ),
   );
 }
@@ -102,9 +102,9 @@ class SuffixeChamp extends StatelessWidget {
       icone,
       taille: StyleIcone.suffixe,
       epaisseur: StyleIcone.traitChamp,
-      couleur: Theme.of(context).colorScheme.onSurfaceVariant.withValues(
-        alpha: StyleIcone.opaciteChamp,
-      ),
+      couleur: Theme.of(
+        context,
+      ).colorScheme.onSurfaceVariant.withValues(alpha: StyleIcone.opaciteChamp),
     ),
   );
 }
@@ -165,4 +165,10 @@ abstract final class Icones {
   static const DonneesIcone document = HugeIcons.strokeRoundedFile01;
   static const DonneesIcone modifier = HugeIcons.strokeRoundedNoteEdit;
   static const DonneesIcone menu = HugeIcons.strokeRoundedMoreVertical;
+
+  // --- Assistant ---
+  static const DonneesIcone assistant = HugeIcons.strokeRoundedSparkles;
+  static const DonneesIcone envoyer = HugeIcons.strokeRoundedSent;
+  static const DonneesIcone nouvelleConversation =
+      HugeIcons.strokeRoundedBubbleChatAdd;
 }

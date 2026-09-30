@@ -62,10 +62,8 @@ class _EtapeVoeuxState extends State<EtapeVoeux> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: <Widget>[
-      const TitreSection(
-        'Premier vœu',
-        aide: 'Choisissez d’abord un secteur, puis un métier.',
-      ),
+      const TitreSection('Premier vœu'),
+      const LegendeObligatoire(),
       _Voeu(
         rang: 1,
         referentiel: widget.referentiel,
@@ -79,7 +77,8 @@ class _EtapeVoeuxState extends State<EtapeVoeux> {
           widget.modifier((d) => d.copyWith(emploi1Id: null));
         }),
         onEmploi: (e) => widget.modifier((d) => d.copyWith(emploi1Id: e?.id)),
-        onAnnees: (n) => widget.modifier((d) => d.copyWith(anneesExperience1: n)),
+        onAnnees: (n) =>
+            widget.modifier((d) => d.copyWith(anneesExperience1: n)),
       ),
 
       const TitreSection('Second vœu'),
@@ -99,12 +98,13 @@ class _EtapeVoeuxState extends State<EtapeVoeux> {
           widget.modifier((d) => d.copyWith(emploi2Id: null));
         }),
         onEmploi: (e) => widget.modifier((d) => d.copyWith(emploi2Id: e?.id)),
-        onAnnees: (n) => widget.modifier((d) => d.copyWith(anneesExperience2: n)),
+        onAnnees: (n) =>
+            widget.modifier((d) => d.copyWith(anneesExperience2: n)),
       ),
 
       const TitreSection(
         'Présentation',
-        aide: 'Quelques lignes sur votre parcours et vos motivations.',
+        aide: 'Quelques lignes sur votre parcours.',
       ),
       ChampTexte(
         libelle: 'Résumé',
@@ -163,6 +163,7 @@ class _Voeu extends StatelessWidget {
         const SizedBox(height: Espace.sm),
         ChampSelection<Emploi>(
           libelle: 'Métier souhaité',
+          obligatoire: true,
           icone: Icones.voeu,
           valeur: emploi,
           elements: metiers,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/ui/async_view.dart';
+import '../../../core/ui/pied_institutionnel.dart';
 import '../../../core/ui/responsive.dart';
 import '../../auth/application/auth_controller.dart';
 
@@ -196,31 +197,7 @@ class _SplashPageState extends ConsumerState<SplashPage>
                             begin: const Offset(0, 0.6),
                             end: Offset.zero,
                           ).animate(_pied),
-                          child: Text(
-                            'Plateforme de Gestion des Demandes d’emploi',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              letterSpacing: 0.4,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: Espace.xxs),
-                      FadeTransition(
-                        opacity: _pied,
-                        child: Text(
-                          'Ministère de la Fonction publique, du travail '
-                          'et de la réforme du service public',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 11,
-                            height: 1.35,
-                            // Très discret : c'est une mention d'autorité, pas
-                            // un titre.
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.6),
-                          ),
+                          child: const PiedInstitutionnel(),
                         ),
                       ),
                     ],
