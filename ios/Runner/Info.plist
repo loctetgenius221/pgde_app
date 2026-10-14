@@ -53,6 +53,10 @@
 		<string>Pour photographier votre photo de profil ou vos diplômes.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>Pour joindre une photo de profil ou un document à votre demande.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>Le micro sert uniquement à dicter le texte de votre demande.</string>
+		<key>NSSpeechRecognitionUsageDescription</key>
+		<string>La reconnaissance vocale transforme votre dictée en texte dans votre demande.</string>
 		<!-- Debug uniquement : backend Laravel local en HTTP. À retirer avant la mise en production. -->
 		<key>NSAppTransportSecurity</key>
 		<dict>

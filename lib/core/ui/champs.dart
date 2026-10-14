@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_dimens.dart';
+import 'bouton_dictee.dart';
 import 'icone.dart';
 import 'responsive.dart';
 
@@ -160,11 +161,16 @@ class ChampTexte extends StatefulWidget {
     this.facultatif = false,
     this.indication,
     this.masquerLibelle = false,
+    this.dictee = false,
     super.key,
   });
 
   /// N'affiche pas le libellé : un intitulé de section le porte déjà.
   final bool masquerLibelle;
+
+  /// Ajoute un bouton micro pour dicter le texte. À réserver aux champs
+  /// longs : sur un nom ou un numéro, le clavier reste plus sûr.
+  final bool dictee;
 
   final String libelle;
   final String valeur;
@@ -224,6 +230,16 @@ class _ChampTexteState extends State<ChampTexte> {
     );
   }
 
+  /// Le texte dicté remplace le contenu, curseur placé à la fin pour que le
+  /// candidat puisse enchaîner au clavier.
+  void _remplacerParDictee(String texte) {
+    _controleur.value = TextEditingValue(
+      text: texte,
+      selection: TextSelection.collapsed(offset: texte.length),
+    );
+    widget.onChange(texte);
+  }
+
   Widget _champ() => TextField(
     controller: _controleur,
     onChanged: widget.onChange,
@@ -240,6 +256,13 @@ class _ChampTexteState extends State<ChampTexte> {
       helperText: widget.aide,
       errorText: widget.erreur,
       prefixIcon: widget.icone == null ? null : PrefixeChamp(widget.icone!),
+      suffixIcon: widget.dictee
+          ? BoutonDictee(
+              texteActuel: () => _controleur.text,
+              onTexte: _remplacerParDictee,
+              longueurMax: widget.longueurMax,
+            )
+          : null,
     ),
   );
 }

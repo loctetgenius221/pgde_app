@@ -4,6 +4,9 @@
          release n'atteint jamais le serveur (« Impossible de joindre le
          serveur »). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Dictée vocale (speech_to_text) : le micro n'est ouvert que pendant
+         une dictée, à la demande du candidat. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
         android:label="Demandes d'emploi"
@@ -53,6 +56,12 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
+        </intent>
+        <!-- Dictée vocale : depuis Android 11, l'app doit déclarer qu'elle
+             cherche le service de reconnaissance vocale du système, sinon
+             speech_to_text le croit absent. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

@@ -161,6 +161,10 @@ abstract final class Icones {
   static const DonneesIcone debutant = HugeIcons.strokeRoundedPlant02;
   static const DonneesIcone presentation = HugeIcons.strokeRoundedTextAlignLeft;
   static const DonneesIcone televerser = HugeIcons.strokeRoundedCloudUpload;
+
+  // --- Dictée vocale ---
+  static const DonneesIcone micro = HugeIcons.strokeRoundedMic01;
+  static const DonneesIcone arreter = HugeIcons.strokeRoundedStop;
   static const DonneesIcone secteur = HugeIcons.strokeRoundedBriefcase02;
   static const DonneesIcone resume = HugeIcons.strokeRoundedNoteEdit;
   static const DonneesIcone ajouter = HugeIcons.strokeRoundedAdd01;

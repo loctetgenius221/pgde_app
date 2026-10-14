@@ -143,6 +143,8 @@ class _EtapeVoeuxState extends State<EtapeVoeux> {
           lignes: 5,
           // Le serveur refuse au-delà de 1000 caractères (§4, étape 4).
           longueurMax: 1000,
+          // Le plus long champ du dossier : dicter fait gagner du temps.
+          dictee: true,
           erreur: widget.erreurs?.errorFor('cv_summary'),
           onChange: (v) => widget.modifier((d) => d.copyWith(resumeCv: v)),
         ),

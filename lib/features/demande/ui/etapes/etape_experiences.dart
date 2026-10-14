@@ -136,6 +136,7 @@ class _ChampsExperience extends StatelessWidget {
           indication: 'Décrivez en quelques lignes ce que vous faisiez.',
           valeur: experience.description,
           lignes: 4,
+          dictee: true,
           onChange: (v) => onChange(experience.copyWith(description: v)),
         ),
       ),

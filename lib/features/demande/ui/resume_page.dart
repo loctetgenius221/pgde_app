@@ -22,6 +22,7 @@ import '../domain/demande.dart';
 import '../domain/telephone.dart';
 import '../domain/wizard.dart';
 import 'avatar_candidat.dart';
+import 'ligne_compte.dart';
 
 /// Récapitulatif du dossier — pendant mobile de la page web
 /// `userdata/summary/{id}`.
@@ -391,66 +392,59 @@ class _EnTete extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
 
-    final Widget identite = Row(
+    // Même construction que la carte d'identité du formulaire : portrait et
+    // nom côte à côte, puis les informations sur toute la largeur. Serrées à
+    // côté du portrait, elles s'étalaient sur deux ou trois lignes chacune.
+    final Widget identite = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        AvatarCandidat(photo: demande.photo),
-        const SizedBox(width: Espace.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'CANDIDAT À LA FONCTION PUBLIQUE',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                utilisateur?.nomComplet ?? '',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (emploiVise.isNotEmpty) ...<Widget>[
-                const SizedBox(height: Espace.xxs),
-                Text.rich(
-                  TextSpan(
-                    children: <InlineSpan>[
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Icone(
-                            Icones.etapeVoeux,
-                            taille: 14,
-                            couleur: scheme.primary,
-                          ),
-                        ),
-                      ),
-                      const TextSpan(text: 'Emploi visé : '),
-                      TextSpan(
-                        text: emploiVise,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: scheme.onSurface,
-                        ),
-                      ),
-                    ],
+        Row(
+          children: <Widget>[
+            AvatarCandidat(photo: demande.photo, taille: 64),
+            const SizedBox(width: Espace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'CANDIDAT À LA FONCTION PUBLIQUE',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                    ),
                   ),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-              if (utilisateur?.numberid case final String cni
-                  when cni.isNotEmpty) ...<Widget>[
-                const SizedBox(height: Espace.xs),
-                _Pastille(icone: Icones.piece, texte: 'CNI / Passeport  $cni'),
-              ],
-            ],
-          ),
+                  const SizedBox(height: 2),
+                  Text(
+                    utilisateur?.nomComplet ?? '',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: Espace.sm),
+        if (emploiVise.isNotEmpty)
+          LigneCompte(
+            icone: Icones.etapeVoeux,
+            libelle: 'Emploi visé',
+            valeur: emploiVise,
+            lignesMax: 2,
+          ),
+        if (utilisateur?.numberid case final String cni when cni.isNotEmpty)
+          LigneCompte(
+            icone: Icones.piece,
+            libelle: 'CNI / Passeport',
+            valeur: cni,
+          ),
       ],
     );
 
@@ -477,21 +471,22 @@ class _EnTete extends StatelessWidget {
           border: Border(top: BorderSide(color: scheme.primary, width: 4)),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(Espace.lg),
+          padding: const EdgeInsets.all(Espace.md),
           child: LayoutBuilder(
             builder: (context, contraintes) => contraintes.maxWidth >= 640
                 ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Expanded(child: identite),
                       const SizedBox(width: Espace.lg),
-                      SizedBox(width: 240, child: actions),
+                      SizedBox(width: 260, child: actions),
                     ],
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       identite,
-                      const SizedBox(height: Espace.lg),
+                      const SizedBox(height: Espace.md),
                       actions,
                     ],
                   ),
@@ -515,17 +510,21 @@ class _NumeroDossier extends StatelessWidget {
     final ColorScheme scheme = theme.colorScheme;
     final bool clair = theme.brightness == Brightness.light;
 
+    // Tuile vert pâle : le n° est l'information à relever, il se détache du
+    // reste de la carte sans recourir au jaune, réservé aux alertes.
     return Container(
       padding: const EdgeInsets.fromLTRB(
         Espace.md,
-        Espace.sm,
-        Espace.sm,
-        Espace.sm,
+        Espace.xs,
+        Espace.xxs,
+        Espace.xs,
       ),
       decoration: BoxDecoration(
-        color: clair ? AppColors.pisteClaire : AppColors.pisteSombre,
+        color: clair
+            ? AppColors.vertPale.withValues(alpha: 0.45)
+            : scheme.primaryContainer,
         borderRadius: BorderRadius.circular(Rayon.champ),
-        border: Border.all(color: scheme.outlineVariant),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: <Widget>[
@@ -543,7 +542,7 @@ class _NumeroDossier extends StatelessWidget {
                 ),
                 Text(
                   '$numero',
-                  style: theme.textTheme.headlineSmall?.copyWith(
+                  style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                   ),
@@ -551,7 +550,7 @@ class _NumeroDossier extends StatelessWidget {
               ],
             ),
           ),
-          OutlinedButton.icon(
+          TextButton.icon(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: '$numero'));
               if (!context.mounted) return;
@@ -561,12 +560,11 @@ class _NumeroDossier extends StatelessWidget {
                   const SnackBar(content: Text('N° de dossier copié.')),
                 );
             },
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 40),
-              padding: const EdgeInsets.symmetric(horizontal: Espace.sm),
-              backgroundColor: scheme.surface,
+            icon: Icone(
+              HugeIcons.strokeRoundedCopy01,
+              taille: 16,
+              couleur: scheme.primary,
             ),
-            icon: const Icone(HugeIcons.strokeRoundedCopy01, taille: 16),
             label: const Text('Copier'),
           ),
         ],

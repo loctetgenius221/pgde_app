@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_dimens.dart';
+import '../../../core/ui/bouton_dictee.dart';
 import '../../../core/ui/icone.dart';
 import '../../../core/ui/responsive.dart';
 import '../application/conversation_controller.dart';
@@ -561,8 +562,18 @@ class _BarreSaisie extends StatelessWidget {
                 maxLines: 4,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => onEnvoyer(),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Posez votre question…',
+                  // Poser sa question à voix haute : le geste naturel face à
+                  // un assistant. Plafonnée à 1000 caractères, comme l'API.
+                  suffixIcon: BoutonDictee(
+                    texteActuel: () => controleur.text,
+                    onTexte: (texte) => controleur.value = TextEditingValue(
+                      text: texte,
+                      selection: TextSelection.collapsed(offset: texte.length),
+                    ),
+                    longueurMax: 1000,
+                  ),
                 ),
               ),
             ),

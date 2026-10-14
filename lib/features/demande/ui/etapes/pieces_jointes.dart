@@ -16,6 +16,7 @@ import '../../data/selecteur_fichiers.dart';
 import '../../domain/demande.dart';
 import '../../domain/regles_fichiers.dart';
 import '../avatar_candidat.dart';
+import '../ligne_compte.dart';
 
 /// Pièces jointes du dossier, réparties sur deux étapes.
 ///
@@ -230,74 +231,18 @@ class _Identite extends StatelessWidget {
         if (compte != null) ...<Widget>[
           const SizedBox(height: Espace.sm),
           if (compte.numberid.isNotEmpty)
-            _LigneCompte(
+            LigneCompte(
               icone: Icones.piece,
               libelle: 'CNI / Passeport',
               valeur: compte.numberid,
             ),
-          _LigneCompte(
+          LigneCompte(
             icone: Icones.email,
             libelle: 'E-mail',
             valeur: compte.email,
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Une information du compte : pictogramme dans une tuile grise, libellé
-/// discret, valeur sur une ligne — le style des lignes de « Mon dossier ».
-class _LigneCompte extends StatelessWidget {
-  const _LigneCompte({
-    required this.icone,
-    required this.libelle,
-    required this.valeur,
-  });
-
-  final DonneesIcone icone;
-  final String libelle;
-  final String valeur;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final bool clair = theme.brightness == Brightness.light;
-    return Padding(
-      padding: const EdgeInsets.only(top: Espace.xs - 2),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: clair ? AppColors.pisteClaire : AppColors.pisteSombre,
-              borderRadius: BorderRadius.circular(Rayon.sm - 2),
-            ),
-            child: Icone(
-              icone,
-              taille: 14,
-              couleur: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(width: Espace.sm),
-          Text(libelle, style: theme.textTheme.bodySmall),
-          const SizedBox(width: Espace.xs),
-          Expanded(
-            child: Text(
-              valeur,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
