@@ -10,7 +10,9 @@ import '../../../core/ui/responsive.dart';
 import '../application/auth_controller.dart';
 
 class ConnexionPage extends ConsumerStatefulWidget {
-  const ConnexionPage({super.key});
+  const ConnexionPage({super.key, this.identifiantInitial});
+
+  final String? identifiantInitial;
 
   @override
   ConsumerState<ConnexionPage> createState() => _ConnexionPageState();
@@ -19,9 +21,25 @@ class ConnexionPage extends ConsumerStatefulWidget {
 class _ConnexionPageState extends ConsumerState<ConnexionPage>
     with FormSubmission {
   final _formKey = GlobalKey<FormState>();
-  final _identifiant = TextEditingController();
+  late final TextEditingController _identifiant;
   final _password = TextEditingController();
   bool _motDePasseVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _identifiant = TextEditingController(text: widget.identifiantInitial ?? '');
+  }
+
+  @override
+  void didUpdateWidget(ConnexionPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.identifiantInitial != null &&
+        widget.identifiantInitial != oldWidget.identifiantInitial &&
+        _identifiant.text.isEmpty) {
+      _identifiant.text = widget.identifiantInitial!;
+    }
+  }
 
   @override
   void dispose() {
@@ -82,6 +100,23 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                     const SizedBox(height: Espace.xl),
 
                     BandeauErreur(erreurGlobale),
+
+                    if (erreur?.isEmailNotVerified == true) ...<Widget>[
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.mail_outline, size: 20),
+                        label: const Text(
+                          'Activer mon compte / Renvoyer le lien',
+                        ),
+                        onPressed: () {
+                          final String emailOuLogin = _identifiant.text.trim();
+                          final String url = emailOuLogin.contains('@')
+                              ? '${Routes.verificationEmail}?email=${Uri.encodeComponent(emailOuLogin)}'
+                              : Routes.verificationEmail;
+                          context.push(url);
+                        },
+                      ),
+                      const SizedBox(height: Espace.md),
+                    ],
 
                     TextFormField(
                       controller: _identifiant,

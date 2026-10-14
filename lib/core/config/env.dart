@@ -1,13 +1,14 @@
 abstract final class Env {
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api/v1',
+    defaultValue: 'https://emploi.fonctionpublique.sn/api/v1',
   );
 
-  // Donner mock utiliser car pas encore d'API présent
+  /// Bascule entre le faux backend en mémoire et la vraie API déployée (ADR-001).
+  /// Passer `--dart-define=USE_MOCKS=true` pour forcer le mode démonstration hors ligne.
   static const bool useMocks = bool.fromEnvironment(
     'USE_MOCKS',
-    defaultValue: true,
+    defaultValue: false,
   );
 
   /// Sert à reconstruire l'adresse d'une pièce jointe quand la réponse ne

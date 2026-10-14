@@ -13,8 +13,10 @@ import '../../assistant/ui/entree_assistant.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/utilisateur.dart';
 import '../application/demande_controller.dart';
+import '../data/brouillon_store.dart';
 import '../domain/demande.dart';
 import '../domain/wizard.dart';
+import 'frise_wizard.dart';
 
 /// Point d'entrée du dossier candidat.
 ///
@@ -34,22 +36,17 @@ class AccueilPage extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        // Ndimbal flotte par-dessus le contenu plutôt que d'y prendre place :
-        // l'aide doit rester à portée où que le candidat ait fait défiler.
-        child: Stack(
-          children: <Widget>[
-            _Contenu(utilisateur: utilisateur, dossier: dossier, ref: ref),
-            // Remonté au-dessus de la signature, qui occupe désormais le
-            // bas de l'écran : posés à la même hauteur, les deux se
-            // chevauchaient.
-            const Positioned(
-              right: Espace.sm,
-              bottom: Espace.xxl + Espace.sm,
-              child: EntreeAssistant(),
-            ),
-          ],
-        ),
+        child: _Contenu(utilisateur: utilisateur, dossier: dossier, ref: ref),
       ),
+      // Ndimbal flotte par-dessus le contenu plutôt que d'y prendre place :
+      // l'aide doit rester à portée où que le candidat ait fait défiler.
+      //
+      // L'emplacement du bouton flottant du `Scaffold`, et non une `Stack`
+      // maison : il tient la marge réglementaire de 16 px au bord et au bas,
+      // respecte la zone de geste système, et **s'écarte tout seul** quand
+      // une `SnackBar` apparaît — là où une position figée la recouvrait.
+      floatingActionButton: const EntreeAssistant(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
@@ -82,34 +79,43 @@ class _Contenu extends StatelessWidget {
           SliverToBoxAdapter(
             child: ConteneurPage(
               largeurMax: LargeurMax.contenu,
+              pleineLargeurEnPaysage: true,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   _EnTete(utilisateur: utilisateur, ref: ref),
                   const SizedBox(height: Espace.lg),
-                  _CarteDossier(demande: demande),
-                  const SizedBox(height: Espace.xl),
-                  Text(
-                    'Les étapes de votre dossier',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: Espace.md),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(Espace.md),
-                      child: FriseEtapes(
-                        elements: <ElementFrise>[
-                          for (final EtapeWizard etape in EtapeWizard.values)
-                            ElementFrise(
-                              numero: etape.numero,
-                              titre: etape.titre,
-                              etat: _etatDe(demande, etape),
-                              statut: _statutDe(demande, etape),
-                              onTap: () =>
-                                  context.push(Routes.wizardEtape(etape)),
+                  _Disposition(
+                    dossier: _CarteDossier(demande: demande),
+                    etapes: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Text(
+                          'Les étapes de votre dossier',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: Espace.md),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(Espace.md),
+                            child: FriseEtapes(
+                              elements: <ElementFrise>[
+                                for (final EtapeWizard etape
+                                    in EtapeWizard.values)
+                                  ElementFrise(
+                                    numero: etape.numero,
+                                    titre: etape.titre,
+                                    icone: iconeEtape(etape),
+                                    etat: _etatDe(demande, etape),
+                                    statut: _statutDe(demande, etape),
+                                    onTap: () =>
+                                        context.push(Routes.wizardEtape(etape)),
+                                  ),
+                              ],
                             ),
-                        ],
-                      ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -124,7 +130,13 @@ class _Contenu extends StatelessWidget {
           const SliverFillRemaining(
             hasScrollBody: false,
             child: Padding(
-              padding: EdgeInsets.only(top: Espace.xxl, bottom: Espace.md),
+              // La marge basse réserve la place de Ndimbal, qui flotte dans
+              // le coin : en fin de défilement, la signature s'arrête
+              // au-dessus de lui au lieu de passer dessous.
+              padding: EdgeInsets.only(
+                top: Espace.xxl,
+                bottom: EntreeAssistant.emprise + Espace.md,
+              ),
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: PiedInstitutionnel(avecPlateforme: false),
@@ -135,6 +147,36 @@ class _Contenu extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Carte du dossier et frise des étapes : l'une sous l'autre sur téléphone,
+/// côte à côte quand l'écran est large — tablette couchée notamment.
+class _Disposition extends StatelessWidget {
+  const _Disposition({required this.dossier, required this.etapes});
+
+  final Widget dossier;
+  final Widget etapes;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, contraintes) => contraintes.maxWidth >= 900
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(child: dossier),
+              const SizedBox(width: Espace.lg),
+              Expanded(child: etapes),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              dossier,
+              const SizedBox(height: Espace.xl),
+              etapes,
+            ],
+          ),
+  );
 }
 
 class _EnTete extends StatelessWidget {
@@ -201,15 +243,9 @@ class _EnTete extends StatelessWidget {
             tooltip: 'Mon compte',
             icon: const Icone(Icones.menu),
             onSelected: (action) => switch (action) {
-              _ActionCompte.motDePasse => context.push(Routes.motDePasse),
-              _ActionCompte.deconnexion =>
-                ref.read(authControllerProvider.notifier).deconnexion(),
+              _ActionCompte.deconnexion => _seDeconnecter(context, ref),
             },
             itemBuilder: (_) => const <PopupMenuEntry<_ActionCompte>>[
-              PopupMenuItem<_ActionCompte>(
-                value: _ActionCompte.motDePasse,
-                child: Text('Changer mon mot de passe'),
-              ),
               PopupMenuItem<_ActionCompte>(
                 value: _ActionCompte.deconnexion,
                 child: Text('Se déconnecter'),
@@ -322,7 +358,47 @@ class _CarteDossier extends StatelessWidget {
   }
 }
 
-enum _ActionCompte { motDePasse, deconnexion }
+enum _ActionCompte { deconnexion }
+
+/// Déconnexion volontaire : le téléphone peut ensuite passer à quelqu'un
+/// d'autre. Tout ce que le candidat a laissé sur l'appareil — brouillon,
+/// pièces choisies — est effacé **avant** la fermeture de la session.
+///
+/// Un brouillon non envoyé serait perdu : on prévient d'abord, plutôt que
+/// d'effacer en silence des heures de saisie.
+Future<void> _seDeconnecter(BuildContext context, WidgetRef ref) async {
+  final bool brouillon = ref.read(brouillonStoreProvider).lire() != null;
+  if (brouillon) {
+    final bool? confirme = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modifications non enregistrées'),
+        content: const Text(
+          'Votre dossier contient des modifications qui n’ont pas été '
+          'enregistrées. En vous déconnectant, elles seront effacées de cet '
+          'appareil.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Se déconnecter'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true) return;
+  }
+
+  await ref.read(demandeControllerProvider.notifier).effacerLesDonneesLocales();
+  await ref.read(authControllerProvider.notifier).deconnexion();
+}
 
 /// Une seule étape est « en cours » : la première non complétée (§7.6,
 /// `completion.etape_courante`). Les suivantes restent à venir, même si une

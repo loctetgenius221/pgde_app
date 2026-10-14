@@ -17,6 +17,13 @@ enum Genre {
   const Genre(this.wire);
 
   final String wire;
+
+  /// §5.2 — `Homme` / `Femme` sont acceptés puis normalisés côté serveur.
+  static Genre? depuis(Object? brut) => switch (brut?.toString()) {
+    'Masculin' || 'Homme' => masculin,
+    'Feminin' || 'Femme' => feminin,
+    _ => null,
+  };
 }
 
 enum SituationMatrimoniale {
@@ -100,10 +107,9 @@ abstract class Formation with _$Formation {
 
     /// Justificatif de **cette** formation.
     ///
-    /// Le contrat le porte à deux endroits : `diplome_file_url` dans la
-    /// lecture du profil (§5.1) et `formation_index` au téléversement
-    /// (§6.4). Le lien formation ↔ document est donc enfin tenu par le
-    /// serveur, et non plus reconstitué côté app.
+    /// Chemin serveur (`file_path`) + URL. Le fichier est d'abord
+    /// téléversé (§6.4), puis son `file_path` est renvoyé dans
+    /// `PUT /candidat/formations` via `diplome_file` (§5.3).
     FichierJoint? justificatif,
   }) = _Formation;
 
@@ -166,6 +172,10 @@ abstract class Demande with _$Demande {
     /// donc qu'à l'affichage — « dossier enregistré » plutôt que « demande
     /// en préparation ».
     @Default(false) bool deposee,
+
+    /// N° de dossier affiché au candidat (`candidat_number`, §5.1) — celui
+    /// que la page web met en avant et qu'il cite à l'administration.
+    int? numeroDossier,
 
     // --- Étape 1 : identité et résidence ---
     @DateOnlyConverter() DateTime? dateNaissance,

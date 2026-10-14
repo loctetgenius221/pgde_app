@@ -6,6 +6,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../auth/application/auth_controller.dart';
 import '../domain/demande.dart';
 import '../domain/regles_fichiers.dart';
 
@@ -95,10 +96,7 @@ final selecteurFichiersProvider = Provider<SelecteurFichiers>(
 /// comportements selon que le dossier existe ou non, l'app suit une règle
 /// unique : on met en file, et tout part à l'enregistrement.
 class PiecesEnAttente {
-  const PiecesEnAttente({
-    this.photo,
-    this.justificatifs = const <int, File>{},
-  });
+  const PiecesEnAttente({this.photo, this.justificatifs = const <int, File>{}});
 
   final File? photo;
 
@@ -119,7 +117,12 @@ class PiecesEnAttente {
 
 class PiecesEnAttenteController extends Notifier<PiecesEnAttente> {
   @override
-  PiecesEnAttente build() => const PiecesEnAttente();
+  PiecesEnAttente build() {
+    // Un changement de compte vide la file : les pièces choisies par un
+    // candidat ne doivent jamais partir sur le dossier du suivant.
+    ref.watch(utilisateurConnecteProvider.select((u) => u?.id));
+    return const PiecesEnAttente();
+  }
 
   void choisirPhoto(File fichier) => state = state.avecPhoto(fichier);
 
@@ -145,6 +148,31 @@ class PiecesEnAttenteController extends Notifier<PiecesEnAttente> {
   }
 
   void vider() => state = const PiecesEnAttente();
+
+  /// Vide la file **et** supprime les fichiers de l'appareil.
+  ///
+  /// Les sélecteurs natifs copient chaque pièce choisie dans le cache de
+  /// l'application ; ces copies (photo d'identité, diplômes) survivraient
+  /// sinon au départ de leur propriétaire.
+  Future<void> effacer() async {
+    final List<File> fichiers = <File>[
+      ?state.photo,
+      ...state.justificatifs.values,
+    ];
+    vider();
+    for (final File fichier in fichiers) {
+      try {
+        if (fichier.existsSync()) await fichier.delete();
+      } on FileSystemException {
+        // Déjà supprimé ou inaccessible : rien de plus à faire.
+      }
+    }
+    try {
+      await FilePicker.clearTemporaryFiles();
+    } on Object {
+      // Plateforme sans cache de sélection : sans objet.
+    }
+  }
 }
 
 final piecesEnAttenteProvider =

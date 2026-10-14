@@ -48,8 +48,7 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   /// La pose du personnage — distincte de l'état de la conversation : il
   /// salue à l'arrivée, puis garde le sourire tant qu'on lui parle. Sur
   /// l'accueil, il reste en veille, bouche droite.
-  PoseNdimbal get _pose =>
-      _salue ? PoseNdimbal.salut : PoseNdimbal.sourire;
+  PoseNdimbal get _pose => _salue ? PoseNdimbal.salut : PoseNdimbal.sourire;
 
   @override
   void dispose() {
@@ -58,11 +57,11 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     super.dispose();
   }
 
-  void _envoyer([String? suggestion]) {
+  void _envoyer([String? suggestion, String? payload]) {
     final String texte = suggestion ?? _saisie.text;
     if (texte.trim().isEmpty) return;
     _saisie.clear();
-    ref.read(conversationProvider.notifier).envoyer(texte);
+    ref.read(conversationProvider.notifier).envoyer(texte, payload: payload);
     _versLeBas();
   }
 
@@ -117,6 +116,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
                   : _Fil(
                       conversation: conversation,
                       controleur: _defilement,
+                      onBouton: (bouton) =>
+                          _envoyer(bouton.titre, bouton.payload),
                     ),
             ),
             if (conversation.erreur case final String erreur)
@@ -157,7 +158,6 @@ class _Entete extends StatelessWidget {
             switch (etat) {
               EtatAssistant.repos => 'Assistant de la plateforme',
               EtatAssistant.reflexion => 'Réfléchit…',
-              EtatAssistant.parle => 'Répond…',
             },
             key: ValueKey<EtatAssistant>(etat),
             style: theme.textTheme.bodySmall,
@@ -269,9 +269,7 @@ class _Suggestion extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
-                Expanded(
-                  child: Text(texte, style: theme.textTheme.bodyMedium),
-                ),
+                Expanded(child: Text(texte, style: theme.textTheme.bodyMedium)),
                 Icone(
                   Icones.suivant,
                   taille: 18,
@@ -288,10 +286,15 @@ class _Suggestion extends StatelessWidget {
 
 /// Le fil de l'échange.
 class _Fil extends StatelessWidget {
-  const _Fil({required this.conversation, required this.controleur});
+  const _Fil({
+    required this.conversation,
+    required this.controleur,
+    required this.onBouton,
+  });
 
   final Conversation conversation;
   final ScrollController controleur;
+  final ValueChanged<BoutonChat> onBouton;
 
   @override
   Widget build(BuildContext context) {
@@ -303,16 +306,17 @@ class _Fil extends StatelessWidget {
       itemCount: conversation.messages.length + (attend ? 1 : 0),
       itemBuilder: (context, i) {
         if (i == conversation.messages.length) return const _Frappe();
-        return _Bulle(message: conversation.messages[i]);
+        return _Bulle(message: conversation.messages[i], onBouton: onBouton);
       },
     );
   }
 }
 
 class _Bulle extends StatelessWidget {
-  const _Bulle({required this.message});
+  const _Bulle({required this.message, required this.onBouton});
 
   final Message message;
+  final ValueChanged<BoutonChat> onBouton;
 
   @override
   Widget build(BuildContext context) {
@@ -333,39 +337,63 @@ class _Bulle extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
           if (deNdimbal) ...<Widget>[
-            // Repère de locuteur, figé : c'est l'en-tête qui porte l'état,
-            // et animer une vignette par bulle ferait tourner des dizaines
-            // d'horloges pour rien.
             const PastilleNdimbal(),
             const SizedBox(width: Espace.xs),
           ],
           Flexible(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 520),
-              padding: const EdgeInsets.symmetric(
-                horizontal: Espace.md,
-                vertical: Espace.sm,
-              ),
-              decoration: BoxDecoration(
-                color: deNdimbal
-                    ? theme.colorScheme.surfaceContainerHighest
-                    : theme.colorScheme.primary,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(Rayon.lg),
-                  topRight: const Radius.circular(Rayon.lg),
-                  bottomLeft: Radius.circular(deNdimbal ? Rayon.sm : Rayon.lg),
-                  bottomRight: Radius.circular(deNdimbal ? Rayon.lg : Rayon.sm),
-                ),
-              ),
-              child: Text(
-                message.texte,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: deNdimbal
-                      ? theme.colorScheme.onSurface
-                      : theme.colorScheme.onPrimary,
-                  height: 1.4,
-                ),
-              ),
+            child: Column(
+              crossAxisAlignment: deNdimbal
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.end,
+              children: <Widget>[
+                if (message.texte.isNotEmpty)
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Espace.md,
+                      vertical: Espace.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: deNdimbal
+                          ? theme.colorScheme.surfaceContainerHighest
+                          : theme.colorScheme.primary,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(Rayon.lg),
+                        topRight: const Radius.circular(Rayon.lg),
+                        bottomLeft: Radius.circular(
+                          deNdimbal ? Rayon.sm : Rayon.lg,
+                        ),
+                        bottomRight: Radius.circular(
+                          deNdimbal ? Rayon.lg : Rayon.sm,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      message.texte,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: deNdimbal
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.onPrimary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                if (message.boutons.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Espace.xs),
+                    child: Wrap(
+                      spacing: Espace.xs,
+                      runSpacing: Espace.xs,
+                      children: <Widget>[
+                        for (final BoutonChat bouton in message.boutons)
+                          ActionChip(
+                            label: Text(bouton.titre),
+                            onPressed: () => onBouton(bouton),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -382,8 +410,7 @@ class _Frappe extends StatefulWidget {
   State<_Frappe> createState() => _FrappeState();
 }
 
-class _FrappeState extends State<_Frappe>
-    with SingleTickerProviderStateMixin {
+class _FrappeState extends State<_Frappe> with SingleTickerProviderStateMixin {
   late final AnimationController _controleur = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
@@ -519,7 +546,9 @@ class _BarreSaisie extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
       ),
       child: ConteneurPage(
         child: Row(

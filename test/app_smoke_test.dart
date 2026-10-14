@@ -62,7 +62,7 @@ void main() {
 
     expect(find.text('Votre espace candidat'), findsOneWidget);
     expect(find.text('Email ou nom d’utilisateur'), findsOneWidget);
-    // §3.3 : on ne se connecte jamais avec l'email.
+    // §3.3 : l'API accepte l'email ou le nom d'utilisateur.
     expect(find.text('Adresse email'), findsNothing);
   });
 

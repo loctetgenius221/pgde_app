@@ -7,7 +7,6 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/ui/connexion_page.dart';
 import '../../features/auth/ui/inscription_page.dart';
 import '../../features/auth/ui/mot_de_passe_oublie_page.dart';
-import '../../features/auth/ui/mot_de_passe_page.dart';
 import '../../features/auth/ui/verification_email_page.dart';
 import '../../features/demande/domain/wizard.dart';
 import '../../features/demande/ui/accueil_page.dart';
@@ -24,7 +23,6 @@ abstract final class Routes {
   static const String connexion = '/connexion';
   static const String inscription = '/inscription';
   static const String motDePasseOublie = '/mot-de-passe-oublie';
-  static const String motDePasse = '/mot-de-passe';
   static const String verificationEmail = '/verification-email';
   static const String accueil = '/';
   static const String wizard = '/demande';
@@ -39,8 +37,8 @@ abstract final class Routes {
 const Set<String> _routesPubliques = <String>{
   Routes.connexion,
   Routes.inscription,
-  // Retrouver son accès ne demande pas d'être connecté — par définition.
   Routes.motDePasseOublie,
+  Routes.verificationEmail,
 };
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -99,7 +97,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ferait passer le splash pour un écran dont on revient.
       _fondu(Routes.demarrage, const SplashPage()),
       _fondu(Routes.onboarding, const OnboardingPage()),
-      _fondu(Routes.connexion, const ConnexionPage()),
+      GoRoute(
+        path: Routes.connexion,
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          transitionDuration: Duree.moyenne,
+          child: ConnexionPage(
+            identifiantInitial:
+                state.uri.queryParameters['login'] ??
+                state.uri.queryParameters['email'],
+          ),
+          transitionsBuilder: (_, animation, _, enfant) =>
+              FadeTransition(opacity: animation, child: enfant),
+        ),
+      ),
       GoRoute(
         path: Routes.inscription,
         builder: (_, _) => const InscriptionPage(),
@@ -109,18 +120,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const MotDePasseOubliePage(),
       ),
       GoRoute(
-        path: Routes.motDePasse,
-        builder: (_, _) => const MotDePassePage(),
+        path: Routes.verificationEmail,
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          transitionDuration: Duree.moyenne,
+          child: VerificationEmailPage(
+            email: state.uri.queryParameters['email'],
+          ),
+          transitionsBuilder: (_, animation, _, enfant) =>
+              FadeTransition(opacity: animation, child: enfant),
+        ),
       ),
-      _fondu(Routes.verificationEmail, const VerificationEmailPage()),
       _fondu(Routes.accueil, const AccueilPage()),
       GoRoute(path: Routes.resume, builder: (_, _) => const ResumePage()),
       // Pas de fondu ici : l'avatar traverse la navigation par `Hero`, et un
       // fondu superposé brouillerait la continuité qu'il établit.
-      GoRoute(
-        path: Routes.assistant,
-        builder: (_, _) => const AssistantPage(),
-      ),
+      GoRoute(path: Routes.assistant, builder: (_, _) => const AssistantPage()),
       GoRoute(
         path: Routes.wizard,
         builder: (_, state) => WizardPage(

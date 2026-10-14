@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/app_dimens.dart';
+import 'bordure_pointillee.dart';
 import 'icone.dart';
 
 /// Liste d'éléments que l'utilisateur ajoute et retire lui-même.
@@ -19,8 +21,12 @@ class ListeDynamique<T> extends StatelessWidget {
     required this.libelleAjout,
     this.messageVide,
     this.onRetirer,
+    this.icone,
     super.key,
   });
+
+  /// Pictogramme de l'étiquette de chaque carte.
+  final DonneesIcone? icone;
 
   final List<T> elements;
   final ValueChanged<List<T>> onChange;
@@ -32,8 +38,7 @@ class ListeDynamique<T> extends StatelessWidget {
   final String Function(int index) titre;
 
   /// Champs d'une ligne. [modifier] remplace l'élément à cet index.
-  final Widget Function(int index, T element, ValueChanged<T> modifier)
-  contenu;
+  final Widget Function(int index, T element, ValueChanged<T> modifier) contenu;
 
   final String libelleAjout;
   final String? messageVide;
@@ -64,25 +69,26 @@ class ListeDynamique<T> extends StatelessWidget {
       children: <Widget>[
         if (elements.isEmpty && messageVide != null)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: Espace.md),
+            padding: const EdgeInsets.only(bottom: Espace.md),
             child: Text(messageVide!, style: theme.textTheme.bodyMedium),
           ),
 
         for (int i = 0; i < elements.length; i++) ...<Widget>[
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(Espace.md),
+              padding: const EdgeInsets.fromLTRB(
+                Espace.md,
+                Espace.sm,
+                Espace.xs,
+                Espace.md,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          titre(i),
-                          style: theme.textTheme.titleMedium,
-                        ),
-                      ),
+                      _Badge(icone: icone, texte: titre(i)),
+                      const Spacer(),
                       IconButton(
                         tooltip: 'Retirer',
                         onPressed: () => _retirer(i),
@@ -95,7 +101,16 @@ class ListeDynamique<T> extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: Espace.xs),
-                  contenu(i, elements[i], (valeur) => _remplacer(i, valeur)),
+                  Padding(
+                    // Compense la marge droite réduite, laissée au bouton
+                    // « Retirer » pour qu'il s'aligne sur le bord de carte.
+                    padding: const EdgeInsets.only(right: Espace.xs),
+                    child: contenu(
+                      i,
+                      elements[i],
+                      (valeur) => _remplacer(i, valeur),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -103,12 +118,73 @@ class ListeDynamique<T> extends StatelessWidget {
           const SizedBox(height: Espace.sm),
         ],
 
-        OutlinedButton.icon(
-          onPressed: _ajouter,
-          icon: const Icone(Icones.ajouter, taille: 20),
-          label: Text(libelleAjout),
+        ZonePointillee(
+          onTap: _ajouter,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icone(
+                Icones.ajouter,
+                taille: 18,
+                couleur: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: Espace.xs),
+              Flexible(
+                child: Text(
+                  libelleAjout,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// Étiquette d'une carte — « Diplôme 1 » —, pastille vert pâle du web.
+class _Badge extends StatelessWidget {
+  const _Badge({required this.icone, required this.texte});
+
+  final DonneesIcone? icone;
+  final String texte;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final bool clair = theme.brightness == Brightness.light;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Espace.sm,
+        vertical: Espace.xxs + 2,
+      ),
+      decoration: BoxDecoration(
+        color: clair
+            ? AppColors.vertPale.withValues(alpha: 0.6)
+            : scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(Rayon.pilule),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (icone != null) ...<Widget>[
+            Icone(icone!, taille: 16, couleur: scheme.primary),
+            const SizedBox(width: Espace.xs - 2),
+          ],
+          Text(
+            texte,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontSize: 13.5,
+              color: clair ? scheme.primary : scheme.onPrimaryContainer,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

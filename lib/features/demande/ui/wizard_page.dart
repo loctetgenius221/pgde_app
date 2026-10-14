@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/ui/async_view.dart';
 import '../../../core/ui/form_submission.dart';
@@ -16,6 +18,7 @@ import 'etapes/etape_experiences.dart';
 import 'etapes/etape_formations.dart';
 import 'etapes/etape_identite.dart';
 import 'etapes/etape_voeux.dart';
+import 'frise_wizard.dart';
 
 /// Le formulaire de demande, en quatre étapes (§4).
 ///
@@ -92,7 +95,11 @@ class _WizardPageState extends ConsumerState<WizardPage> {
       await ref.read(demandeControllerProvider.notifier).enregistrer();
       if (!mounted) return;
       _annoncer('Demande enregistrée.');
-      Navigator.of(context).pop();
+      // Comme sur le web : un enregistrement réussi mène au récapitulatif,
+      // où le candidat vérifie ce que le serveur a retenu et relève son
+      // n° de dossier. Le formulaire est remplacé, pas empilé : « retour »
+      // ramène à l'accueil, pas dans le formulaire qu'il vient de valider.
+      context.pushReplacement(Routes.resume);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _erreurs = e);
@@ -111,10 +118,29 @@ class _WizardPageState extends ConsumerState<WizardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_etape.titre),
+        // Titre et état sur deux lignes : l'étape et la rassurance « brouillon
+        // enregistré » sont lues en haut, d'un coup d'œil, et libèrent la
+        // barre du bas, qui ne garde que les actions.
+        title: _TitreEtape(etape: _etape),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(6),
-          child: _Progression(etape: _etape),
+          preferredSize: Size.fromHeight(context.format.estTablette ? 80 : 68),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+            ),
+            // Même largeur que le formulaire en dessous, pour que la frise
+            // reste alignée sur les champs.
+            child: ConteneurPage(
+              largeurMax: LargeurMax.contenu,
+              pleineLargeurEnPaysage: true,
+              padding: EdgeInsets.zero,
+              child: FriseWizard(etape: _etape, onEtape: _allerA),
+            ),
+          ),
         ),
       ),
       body: AsyncView<Referentiel>(
@@ -217,25 +243,62 @@ class _Defilement extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     padding: const EdgeInsets.only(top: Espace.sm, bottom: Espace.xxl),
-    child: ConteneurPage(child: child),
+    // Même largeur que l'accueil : à 520 px, les champs paraissaient
+    // tassés au milieu d'un écran large.
+    child: ConteneurPage(
+      largeurMax: LargeurMax.contenu,
+      pleineLargeurEnPaysage: true,
+      child: child,
+    ),
   );
 }
 
-class _Progression extends StatelessWidget {
-  const _Progression({required this.etape});
+/// Titre de l'étape, et en dessous sa position et l'état du brouillon.
+class _TitreEtape extends StatelessWidget {
+  const _TitreEtape({required this.etape});
 
   final EtapeWizard etape;
 
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-    duration: Duree.moyenne,
-    curve: Curves.easeOutCubic,
-    tween: Tween<double>(
-      begin: 0,
-      end: (etape.index + 1) / EtapeWizard.values.length,
-    ),
-    builder: (context, valeur, _) => LinearProgressIndicator(value: valeur),
-  );
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          etape.titre,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleMedium?.copyWith(fontSize: 17),
+        ),
+        const SizedBox(height: 2),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              'Étape ${etape.numero} sur ${EtapeWizard.values.length}',
+              style: theme.textTheme.bodySmall,
+            ),
+            Text('  ·  ', style: theme.textTheme.bodySmall),
+            Icone(Icones.valide, taille: 13, couleur: scheme.primary),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                'Brouillon enregistré',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
 class _BarreNavigation extends StatelessWidget {
@@ -268,59 +331,74 @@ class _BarreNavigation extends StatelessWidget {
         ),
         padding: const EdgeInsets.symmetric(vertical: Espace.sm),
         child: ConteneurPage(
+          largeurMax: LargeurMax.contenu,
+          pleineLargeurEnPaysage: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Text(
-                'Étape ${etape.numero} sur ${EtapeWizard.values.length} · '
-                'brouillon enregistré',
-                style: theme.textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: Espace.xs),
-              Row(
-                children: <Widget>[
-                  if (onPrecedent != null) ...<Widget>[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: envoiEnCours ? null : onPrecedent,
-                        // Marges resserrées : à deux boutons sur une largeur
-                        // de téléphone, « Précédent » passait à la ligne.
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: Espace.xs,
+              LayoutBuilder(
+                builder: (context, contraintes) {
+                  // Sur grand écran, deux boutons étirés sur toute la
+                  // largeur deviendraient des bandeaux : comme sur le web,
+                  // « Précédent » se range à gauche, l'action à droite.
+                  final bool large = contraintes.maxWidth >= 720;
+                  Widget place(Widget bouton) => large
+                      ? SizedBox(width: 220, child: bouton)
+                      : Expanded(child: bouton);
+
+                  return Row(
+                    children: <Widget>[
+                      if (onPrecedent != null) ...<Widget>[
+                        place(
+                          OutlinedButton.icon(
+                            onPressed: envoiEnCours ? null : onPrecedent,
+                            // Marges resserrées : à deux boutons sur une
+                            // largeur de téléphone, « Précédent » passait à
+                            // la ligne.
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Espace.xs,
+                              ),
+                            ),
+                            icon: const Icone(Icones.precedent, taille: 18),
+                            label: const Text(
+                              'Précédent',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Précédent',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        if (large)
+                          const Spacer()
+                        else
+                          const SizedBox(width: Espace.sm),
+                      ] else if (large)
+                        const Spacer(),
+                      // Parts égales sur téléphone : la hiérarchie vient du
+                      // remplissage, pas de la largeur.
+                      place(
+                        FilledButton.icon(
+                          onPressed: envoiEnCours
+                              ? null
+                              : (derniere ? onEnregistrer : onSuivant),
+                          // La flèche après le libellé, comme sur le web :
+                          // elle montre où l'on va.
+                          iconAlignment: IconAlignment.end,
+                          icon: envoiEnCours
+                              ? const SizedBox.shrink()
+                              : Icone(
+                                  derniere ? Icones.valide : Icones.suivant,
+                                  taille: 20,
+                                  couleur: theme.colorScheme.onPrimary,
+                                ),
+                          label: envoiEnCours
+                              ? const IndicateurBouton()
+                              : Text(derniere ? 'Enregistrer' : 'Suivant'),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: Espace.sm),
-                  ],
-                  // Parts égales : la hiérarchie vient du remplissage, pas de
-                  // la largeur. Deux tiers pour l'action principale ne lui
-                  // apportaient rien et étranglaient l'autre.
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: envoiEnCours
-                          ? null
-                          : (derniere ? onEnregistrer : onSuivant),
-                      icon: envoiEnCours
-                          ? const SizedBox.shrink()
-                          : Icone(
-                              derniere ? Icones.valide : Icones.suivant,
-                              taille: 20,
-                              couleur: theme.colorScheme.onPrimary,
-                            ),
-                      label: envoiEnCours
-                          ? const IndicateurBouton()
-                          : Text(derniere ? 'Enregistrer' : 'Continuer'),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
             ],
           ),

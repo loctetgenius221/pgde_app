@@ -63,10 +63,7 @@ abstract final class StyleIcone {
   static const double opaciteChamp = 0.5;
 }
 
-/// Icône placée en tête d'un champ de saisie.
-///
-/// Les champs sont en pilule : une icône collée au bord entrerait dans la
-/// courbe. Ce décalage la replace sur la partie droite du rayon.
+/// Icône placée en tête d'un champ de saisie, alignée sur la marge du texte.
 class PrefixeChamp extends StatelessWidget {
   const PrefixeChamp(this.icone, {super.key});
 
@@ -74,7 +71,7 @@ class PrefixeChamp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 18, right: 10),
+    padding: const EdgeInsets.only(left: 14, right: 8),
     child: Icone(
       icone,
       taille: StyleIcone.prefixe,
@@ -88,8 +85,7 @@ class PrefixeChamp extends StatelessWidget {
 
 /// Icône placée en fin de champ : chevron d'une liste, calendrier d'une date.
 ///
-/// Même décalage que [PrefixeChamp], pour ne pas entrer dans la courbe de la
-/// pilule, mais plus discrète.
+/// Même marge que [PrefixeChamp], mais plus discrète.
 class SuffixeChamp extends StatelessWidget {
   const SuffixeChamp(this.icone, {super.key});
 
@@ -97,7 +93,7 @@ class SuffixeChamp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 10, right: 18),
+    padding: const EdgeInsets.only(left: 8, right: 14),
     child: Icone(
       icone,
       taille: StyleIcone.suffixe,
@@ -151,6 +147,20 @@ abstract final class Icones {
   static const DonneesIcone poste = HugeIcons.strokeRoundedBriefcase01;
   static const DonneesIcone employeur = HugeIcons.strokeRoundedBuilding01;
   static const DonneesIcone voeu = HugeIcons.strokeRoundedFavourite;
+  static const DonneesIcone moins = HugeIcons.strokeRoundedMinusSign;
+
+  // Tuiles de la frise du wizard — les mêmes pictogrammes que le web.
+  static const DonneesIcone etapeIdentite = HugeIcons.strokeRoundedUser;
+  static const DonneesIcone etapeFormations =
+      HugeIcons.strokeRoundedMortarboard01;
+  static const DonneesIcone etapeExperiences =
+      HugeIcons.strokeRoundedBriefcase01;
+  static const DonneesIcone etapeVoeux = HugeIcons.strokeRoundedTarget02;
+
+  /// « Non, pas encore » d'expérience — une pousse : un début, pas un manque.
+  static const DonneesIcone debutant = HugeIcons.strokeRoundedPlant02;
+  static const DonneesIcone presentation = HugeIcons.strokeRoundedTextAlignLeft;
+  static const DonneesIcone televerser = HugeIcons.strokeRoundedCloudUpload;
   static const DonneesIcone secteur = HugeIcons.strokeRoundedBriefcase02;
   static const DonneesIcone resume = HugeIcons.strokeRoundedNoteEdit;
   static const DonneesIcone ajouter = HugeIcons.strokeRoundedAdd01;

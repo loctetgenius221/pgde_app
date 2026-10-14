@@ -1,17 +1,21 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_dimens.dart';
+import '../../../../core/ui/bordure_pointillee.dart';
 import '../../../../core/ui/champs.dart';
 import '../../../../core/ui/icone.dart';
+import '../../../auth/application/auth_controller.dart';
+import '../../../auth/domain/utilisateur.dart';
 import '../../application/demande_controller.dart';
 import '../../data/selecteur_fichiers.dart';
 import '../../domain/demande.dart';
 import '../../domain/regles_fichiers.dart';
+import '../avatar_candidat.dart';
 
 /// Pièces jointes du dossier, réparties sur deux étapes.
 ///
@@ -21,8 +25,8 @@ import '../../domain/regles_fichiers.dart';
 /// (contrat §6.4).
 ///
 /// Les fichiers choisis sont mis en file et partent à l'enregistrement : un
-/// justificatif est déposé avec un `formation_index`, et ce rang n'existe
-/// côté serveur qu'une fois les formations enregistrées.
+/// justificatif est d'abord téléversé (§6.4), puis son `file_path` est
+/// rattaché à la formation via `PUT /candidat/formations` (§5.3).
 
 /// Mutualise le choix d'un fichier : exécution, validation, message d'échec.
 mixin _ChoixDePiece<T extends ConsumerStatefulWidget> on ConsumerState<T> {
@@ -87,90 +91,264 @@ class _SectionPhotoState extends ConsumerState<SectionPhoto>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
     final File? enAttente = ref.watch(piecesEnAttenteProvider).photo;
     final FichierJoint? deposee = widget.demande.photo;
+    final Utilisateur? utilisateur = ref.watch(utilisateurConnecteProvider);
+    final bool aUnePhoto = enAttente != null || deposee != null;
+
+    // Carte d'identité du candidat, de la même famille que l'en-tête de
+    // « Mon dossier » : il sait d'emblée pour quel compte il remplit le
+    // dossier, et la photo trouve sa place naturelle à côté de son nom.
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: scheme.primary, width: 4)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(Espace.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _Identite(
+                utilisateur: utilisateur,
+                avatar: AvatarCandidat(
+                  photo: deposee,
+                  fichierLocal: enAttente,
+                  taille: 64,
+                  onTap: occupe ? null : _choisir,
+                  libelleAction: aUnePhoto
+                      ? 'Changer la photo'
+                      : 'Ajouter une photo',
+                ),
+              ),
+              const SizedBox(height: Espace.md),
+              const Divider(height: 1),
+              const SizedBox(height: Espace.sm),
+              if (enAttente != null)
+                _PhotoPrete(
+                  onAnnuler: occupe
+                      ? null
+                      : () => ref
+                            .read(piecesEnAttenteProvider.notifier)
+                            .retirerPhoto(),
+                )
+              else
+                // `Wrap` : la mention passe sous le bouton quand la largeur
+                // d'un téléphone ne suffit pas à les aligner.
+                Wrap(
+                  spacing: Espace.sm,
+                  runSpacing: Espace.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: occupe ? null : _choisir,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 42),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Espace.md,
+                        ),
+                      ),
+                      icon: Icone(
+                        Icones.photo,
+                        taille: 17,
+                        couleur: scheme.primary,
+                      ),
+                      label: Text(
+                        aUnePhoto ? 'Changer la photo' : 'Ajouter une photo',
+                      ),
+                    ),
+                    Text(
+                      'Facultatif · '
+                      '${ReglesFichiers.formatsAdmis(TypeFichier.photo)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Portrait et nom côte à côte, puis pièce d'identité et e-mail sur toute
+/// la largeur.
+///
+/// Serrés à côté du portrait, l'e-mail se coupait en plein mot
+/// (« …@gmail.c / om ») : sur toute la largeur, une adresse courante tient
+/// sur une ligne.
+class _Identite extends StatelessWidget {
+  const _Identite({required this.utilisateur, required this.avatar});
+
+  final Utilisateur? utilisateur;
+  final Widget avatar;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Utilisateur? compte = utilisateur;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        TitreSection(
-          'Photo de profil',
-          aide: ReglesFichiers.formatsAdmis(TypeFichier.photo),
-        ),
         Row(
           children: <Widget>[
-            ClipOval(
-              child: SizedBox.square(
-                dimension: 88,
-                child: _apercu(theme, enAttente, deposee),
-              ),
-            ),
+            avatar,
             const SizedBox(width: Espace.md),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  OutlinedButton.icon(
-                    onPressed: occupe ? null : _choisir,
-                    icon: const Icone(Icones.galerie, taille: 18),
-                    label: Text(
-                      enAttente == null && deposee == null
-                          ? 'Choisir une photo'
-                          : 'Changer la photo',
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(46),
+                  Text(
+                    'VOTRE COMPTE CANDIDAT',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.1,
                     ),
                   ),
-                  if (enAttente != null)
-                    TextButton(
-                      onPressed: occupe
-                          ? null
-                          : () => ref
-                                .read(piecesEnAttenteProvider.notifier)
-                                .retirerPhoto(),
-                      child: const Text('Annuler ce choix'),
+                  const SizedBox(height: 2),
+                  Text(
+                    compte?.nomComplet ?? '',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
                     ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
-        if (enAttente != null)
-          Padding(
-            padding: const EdgeInsets.only(top: Espace.xs),
-            child: Text(
-              'Sera envoyée à l’enregistrement.',
-              style: theme.textTheme.bodySmall,
+        if (compte != null) ...<Widget>[
+          const SizedBox(height: Espace.sm),
+          if (compte.numberid.isNotEmpty)
+            _LigneCompte(
+              icone: Icones.piece,
+              libelle: 'CNI / Passeport',
+              valeur: compte.numberid,
             ),
+          _LigneCompte(
+            icone: Icones.email,
+            libelle: 'E-mail',
+            valeur: compte.email,
           ),
+        ],
       ],
     );
   }
+}
 
-  Widget _apercu(ThemeData theme, File? enAttente, FichierJoint? deposee) {
-    if (enAttente != null) return Image.file(enAttente, fit: BoxFit.cover);
-    if (deposee != null) {
-      return CachedNetworkImage(
-        // §8.9 : les noms de fichiers du serveur contiennent espaces et
-        // accents non assainis — une URL brute échoue.
-        imageUrl: deposee.urlSure,
-        fit: BoxFit.cover,
-        errorWidget: (_, _, _) => _vide(theme),
-      );
-    }
-    return _vide(theme);
+/// Une information du compte : pictogramme dans une tuile grise, libellé
+/// discret, valeur sur une ligne — le style des lignes de « Mon dossier ».
+class _LigneCompte extends StatelessWidget {
+  const _LigneCompte({
+    required this.icone,
+    required this.libelle,
+    required this.valeur,
+  });
+
+  final DonneesIcone icone;
+  final String libelle;
+  final String valeur;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool clair = theme.brightness == Brightness.light;
+    return Padding(
+      padding: const EdgeInsets.only(top: Espace.xs - 2),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: clair ? AppColors.pisteClaire : AppColors.pisteSombre,
+              borderRadius: BorderRadius.circular(Rayon.sm - 2),
+            ),
+            child: Icone(
+              icone,
+              taille: 14,
+              couleur: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: Espace.sm),
+          Text(libelle, style: theme.textTheme.bodySmall),
+          const SizedBox(width: Espace.xs),
+          Expanded(
+            child: Text(
+              valeur,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
 
-  Widget _vide(ThemeData theme) => ColoredBox(
-    color: theme.colorScheme.surfaceContainerHighest,
-    child: Icone(
-      Icones.photo,
-      taille: 30,
-      epaisseur: StyleIcone.traitChamp,
-      couleur: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-    ),
-  );
+/// Photo choisie mais pas encore envoyée : on le dit, et on permet de
+/// revenir sur ce choix.
+class _PhotoPrete extends StatelessWidget {
+  const _PhotoPrete({required this.onAnnuler});
+
+  final VoidCallback? onAnnuler;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final bool clair = theme.brightness == Brightness.light;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Espace.sm,
+              vertical: Espace.xs,
+            ),
+            decoration: BoxDecoration(
+              color: clair
+                  ? AppColors.vertPale.withValues(alpha: 0.6)
+                  : scheme.primaryContainer,
+              borderRadius: BorderRadius.circular(Rayon.champ),
+            ),
+            child: Row(
+              children: <Widget>[
+                Icone(Icones.valide, taille: 16, couleur: scheme.primary),
+                const SizedBox(width: Espace.xs),
+                Expanded(
+                  child: Text(
+                    'Photo prête, envoyée à l’enregistrement',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: clair ? scheme.primary : scheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        TextButton(onPressed: onAnnuler, child: const Text('Annuler')),
+      ],
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -191,8 +369,7 @@ class JustificatifFormation extends ConsumerStatefulWidget {
     super.key,
   });
 
-  /// Rang de la formation dans la liste. C'est le `formation_index` du
-  /// contrat §6.4 : le serveur s'en sert pour rattacher le document.
+  /// Rang de la formation dans la liste locale.
   final int rang;
 
   /// Justificatif déjà sur le serveur pour cette formation.
@@ -237,6 +414,14 @@ class _JustificatifFormationState extends ConsumerState<JustificatifFormation>
         .justificatifs[widget.rang];
     final FichierJoint? depose = widget.depose;
 
+    return ChampLibelle(
+      libelle: 'Justificatif',
+      facultatif: true,
+      child: _contenu(theme, enAttente, depose),
+    );
+  }
+
+  Widget _contenu(ThemeData theme, File? enAttente, FichierJoint? depose) {
     // Le choix local prime sur la pièce déposée : c'est la dernière intention
     // du candidat, et c'est elle qui partira à l'enregistrement.
     if (enAttente != null) {
@@ -264,25 +449,48 @@ class _JustificatifFormationState extends ConsumerState<JustificatifFormation>
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: occupe ? null : _choisir,
-          icon: const Icone(Icones.ajouter, taille: 20),
-          label: const Text('Joindre le justificatif'),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: Espace.xxs),
-          child: Text(
-            // §6.4 accepte les images : le candidat peut photographier son
-            // diplôme, ce que l'ancienne règle refusait.
-            ReglesFichiers.formatsAdmis(TypeFichier.diplome),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall,
+    // Zone pointillée du web : une place à remplir, pas encore une pièce.
+    return ZonePointillee(
+      onTap: occupe ? null : _choisir,
+      padding: const EdgeInsets.symmetric(
+        horizontal: Espace.md,
+        vertical: Espace.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          occupe
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icone(
+                  Icones.televerser,
+                  taille: 20,
+                  couleur: theme.colorScheme.primary,
+                ),
+          const SizedBox(width: Espace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Joindre le diplôme',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                Text(
+                  // §6.4 accepte les images : le candidat peut photographier
+                  // son diplôme, ce que l'ancienne règle refusait.
+                  ReglesFichiers.formatsAdmis(TypeFichier.diplome),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

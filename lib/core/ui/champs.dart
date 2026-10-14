@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/app_dimens.dart';
 import 'icone.dart';
 import 'responsive.dart';
@@ -33,15 +34,106 @@ Widget libelleObligatoire(BuildContext context, String libelle) => Text.rich(
   ),
 );
 
+/// Libellé posé **au-dessus** du champ, comme sur la plateforme web.
+///
+/// Un libellé flottant disparaît dans la bordure une fois le champ rempli ;
+/// au-dessus, il reste lisible — et le candidat retrouve la disposition qu'il
+/// connaît déjà sur le site.
+class ChampLibelle extends StatelessWidget {
+  const ChampLibelle({
+    required this.libelle,
+    required this.child,
+    this.obligatoire = false,
+    this.facultatif = false,
+    super.key,
+  });
+
+  final String libelle;
+  final bool obligatoire;
+
+  /// Ajoute la pastille « facultatif » du web. À réserver aux champs qu'on
+  /// pourrait croire exigés — téléphone secondaire, justificatif — et non à
+  /// tout ce qui n'a pas d'astérisque : trente pastilles ne diraient plus rien.
+  final bool facultatif;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Widget texte = obligatoire
+        ? libelleObligatoire(context, libelle)
+        : Text(libelle);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        DefaultTextStyle.merge(
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface,
+          ),
+          child: facultatif
+              ? Wrap(
+                  spacing: Espace.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[texte, const PastilleFacultatif()],
+                )
+              : texte,
+        ),
+        const SizedBox(height: Espace.xs - 2),
+        child,
+      ],
+    );
+  }
+}
+
+/// Petite pastille grise « facultatif », comme sur la plateforme web.
+class PastilleFacultatif extends StatelessWidget {
+  const PastilleFacultatif({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool clair = theme.brightness == Brightness.light;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Espace.xs, vertical: 1),
+      decoration: BoxDecoration(
+        color: clair ? AppColors.pisteClaire : AppColors.pisteSombre,
+        borderRadius: BorderRadius.circular(Rayon.pilule),
+      ),
+      child: Text(
+        'facultatif',
+        style: theme.textTheme.bodySmall?.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+/// Phrase d'introduction en tête d'étape : dit en une ligne ce qu'on attend,
+/// comme le fait le formulaire web.
+class IntroEtape extends StatelessWidget {
+  const IntroEtape(this.texte, {super.key});
+
+  final String texte;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: Espace.sm, bottom: Espace.md),
+    child: Text(texte, style: Theme.of(context).textTheme.bodyMedium),
+  );
+}
+
 /// Rappel de la convention, à placer une fois en tête d'étape.
 class LegendeObligatoire extends StatelessWidget {
   const LegendeObligatoire({super.key});
 
   @override
   Widget build(BuildContext context) => Padding(
-    // Marge basse indispensable : le libellé flottant du champ qui suit se
-    // dessine **au-dessus** de sa bordure, et venait se poser sur cette
-    // ligne. Sans elle, les deux textes se chevauchent.
     padding: const EdgeInsets.only(top: Espace.xxs, bottom: Espace.sm),
     child: Text(
       '* Champs obligatoires',
@@ -65,8 +157,14 @@ class ChampTexte extends StatefulWidget {
     this.longueurMax,
     this.majusculesAutomatiques = false,
     this.obligatoire = false,
+    this.facultatif = false,
+    this.indication,
+    this.masquerLibelle = false,
     super.key,
   });
+
+  /// N'affiche pas le libellé : un intitulé de section le porte déjà.
+  final bool masquerLibelle;
 
   final String libelle;
   final String valeur;
@@ -80,6 +178,10 @@ class ChampTexte extends StatefulWidget {
   final int? longueurMax;
   final bool majusculesAutomatiques;
   final bool obligatoire;
+  final bool facultatif;
+
+  /// Exemple affiché dans le champ vide — « ex : Licence en comptabilité ».
+  final String? indication;
 
   @override
   State<ChampTexte> createState() => _ChampTexteState();
@@ -109,42 +211,37 @@ class _ChampTexteState extends State<ChampTexte> {
 
   @override
   Widget build(BuildContext context) {
-    final bool multiligne = widget.lignes > 1;
-    return TextField(
-      controller: _controleur,
-      onChanged: widget.onChange,
-      keyboardType: widget.clavier,
-      inputFormatters: widget.formatteurs,
-      minLines: widget.lignes,
-      maxLines: widget.lignes,
-      maxLength: widget.longueurMax,
-      textCapitalization: widget.majusculesAutomatiques
-          ? TextCapitalization.words
-          : TextCapitalization.none,
-      decoration: InputDecoration(
-        labelText: widget.obligatoire ? null : widget.libelle,
-        label: widget.obligatoire
-            ? libelleObligatoire(context, widget.libelle)
-            : null,
-        helperText: widget.aide,
-        errorText: widget.erreur,
-        prefixIcon: widget.icone == null ? null : PrefixeChamp(widget.icone!),
-        // Un champ multiligne ne peut pas être une pilule : le rayon du thème
-        // avalerait les lignes du milieu.
-        border: multiligne ? _bordureMultiligne(context) : null,
-        enabledBorder: multiligne ? _bordureMultiligne(context) : null,
-        alignLabelWithHint: multiligne,
-      ),
+    final Widget champ = _champ();
+    if (widget.masquerLibelle) {
+      // Le libellé reste annoncé aux lecteurs d'écran, même invisible.
+      return Semantics(label: widget.libelle, child: champ);
+    }
+    return ChampLibelle(
+      libelle: widget.libelle,
+      obligatoire: widget.obligatoire,
+      facultatif: widget.facultatif,
+      child: champ,
     );
   }
 
-  OutlineInputBorder _bordureMultiligne(BuildContext context) =>
-      OutlineInputBorder(
-        borderRadius: BorderRadius.circular(Rayon.lg),
-        borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
-      );
+  Widget _champ() => TextField(
+    controller: _controleur,
+    onChanged: widget.onChange,
+    keyboardType: widget.clavier,
+    inputFormatters: widget.formatteurs,
+    minLines: widget.lignes,
+    maxLines: widget.lignes,
+    maxLength: widget.longueurMax,
+    textCapitalization: widget.majusculesAutomatiques
+        ? TextCapitalization.words
+        : TextCapitalization.none,
+    decoration: InputDecoration(
+      hintText: widget.indication,
+      helperText: widget.aide,
+      errorText: widget.erreur,
+      prefixIcon: widget.icone == null ? null : PrefixeChamp(widget.icone!),
+    ),
+  );
 }
 
 /// Sélection dans une liste, présentée en feuille modale.
@@ -165,6 +262,8 @@ class ChampSelection<T> extends StatelessWidget {
     this.recherche = false,
     this.messageListeVide,
     this.obligatoire = false,
+    this.facultatif = false,
+    this.indication = 'Sélectionner',
     super.key,
   });
 
@@ -180,8 +279,14 @@ class ChampSelection<T> extends StatelessWidget {
   /// Ajoute un filtre textuel. À activer dès que la liste dépasse l'écran.
   final bool recherche;
 
+  /// Affiché **dans** le champ tant que la liste est vide — « Choisissez
+  /// d'abord une région » —, là où le regard cherche la valeur.
   final String? messageListeVide;
   final bool obligatoire;
+  final bool facultatif;
+
+  /// Texte du champ tant que rien n'est choisi.
+  final String indication;
 
   bool get _actif => elements.isNotEmpty;
 
@@ -207,28 +312,35 @@ class ChampSelection<T> extends StatelessWidget {
     final theme = Theme.of(context);
     final bool vide = valeur == null;
 
-    return InkWell(
-      onTap: _actif ? () => _ouvrir(context) : null,
-      borderRadius: BorderRadius.circular(Rayon.pilule),
-      child: InputDecorator(
-        isEmpty: false,
-        decoration: InputDecoration(
-          labelText: obligatoire ? null : libelle,
-          label: obligatoire ? libelleObligatoire(context, libelle) : null,
-          helperText: _actif ? aide : (messageListeVide ?? aide),
-          errorText: erreur,
-          enabled: _actif,
-          prefixIcon: icone == null ? null : PrefixeChamp(icone!),
-          suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedArrowDown01),
-        ),
-        child: Text(
-          vide ? 'Sélectionner' : etiquette(valeur as T),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: vide || !_actif
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.onSurface,
+    return ChampLibelle(
+      libelle: libelle,
+      obligatoire: obligatoire,
+      facultatif: facultatif,
+      child: InkWell(
+        onTap: _actif ? () => _ouvrir(context) : null,
+        borderRadius: BorderRadius.circular(Rayon.champ),
+        child: InputDecorator(
+          isEmpty: false,
+          decoration: InputDecoration(
+            helperText: aide,
+            errorText: erreur,
+            enabled: _actif,
+            prefixIcon: icone == null ? null : PrefixeChamp(icone!),
+            suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedArrowDown01),
+          ),
+          child: Text(
+            !_actif && messageListeVide != null
+                ? messageListeVide!
+                : vide
+                ? indication
+                : etiquette(valeur as T),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: vide || !_actif
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.onSurface,
+            ),
           ),
         ),
       ),
@@ -353,7 +465,12 @@ class _FeuilleSelectionState<T> extends State<_FeuilleSelection<T>> {
   }
 }
 
-/// Choix parmi deux ou trois options courtes, affichées d'un bloc.
+/// Choix parmi quelques options courtes, affichées d'un bloc.
+///
+/// Même dessin que sur la plateforme web : une piste grise sur laquelle
+/// l'option retenue se détache en blanc, texte vert et gras. Au-delà de trois
+/// options, la largeur d'un téléphone ne suffit plus : [colonnes] répartit
+/// alors les options sur plusieurs lignes (4 situations matrimoniales → 2 × 2).
 class ChoixSegmente<T> extends StatelessWidget {
   const ChoixSegmente({
     required this.libelle,
@@ -363,6 +480,9 @@ class ChoixSegmente<T> extends StatelessWidget {
     required this.onChange,
     this.erreur,
     this.obligatoire = false,
+    this.facultatif = false,
+    this.colonnes,
+    this.icone,
     super.key,
   });
 
@@ -373,32 +493,110 @@ class ChoixSegmente<T> extends StatelessWidget {
   final ValueChanged<T> onChange;
   final String? erreur;
   final bool obligatoire;
+  final bool facultatif;
+
+  /// Options par ligne quand la place manque. Par défaut, toutes sur une
+  /// seule. Dès que la largeur offre [_largeurOptionMin] par option, elles
+  /// repassent toutes sur une ligne — sur tablette notamment.
+  final int? colonnes;
+
+  /// Pictogramme posé devant le libellé de chaque option. Facultatif.
+  final DonneesIcone Function(T)? icone;
+
+  static const double _largeurOptionMin = 120;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ChampLibelle(
+    libelle: libelle,
+    obligatoire: obligatoire,
+    facultatif: facultatif,
+    child: LayoutBuilder(
+      builder: (context, contraintes) =>
+          _choix(context, _parLigne(context, contraintes.maxWidth)),
+    ),
+  );
+
+  /// Options par ligne pour une piste large de [largeur].
+  ///
+  /// On part du plus large possible, puis on resserre tant qu'un libellé ne
+  /// tient pas sur **une** ligne dans sa case : « Oui, j'ai de l'expérience »
+  /// coupé en deux, icône décentrée, faisait brouillon. Au pire, les options
+  /// s'empilent une par ligne, comme des cartes de choix.
+  int _parLigne(BuildContext context, double largeur) {
+    final int initial = largeur >= options.length * _largeurOptionMin
+        ? options.length
+        : colonnes ?? options.length;
+
+    final TextStyle style = Theme.of(
+      context,
+    ).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w600);
+    final TextScaler echelle = MediaQuery.textScalerOf(context);
+    final double plusLarge = options
+        .map((o) {
+          final TextPainter mesure = TextPainter(
+            text: TextSpan(text: etiquette(o), style: style),
+            textDirection: Directionality.of(context),
+            textScaler: echelle,
+            maxLines: 1,
+          )..layout();
+          // Marges du segment, plus l'icône et son écart s'il y en a une.
+          return mesure.width +
+              Espace.xxs * 2 +
+              Espace.sm +
+              (icone == null ? 0 : 18 + Espace.xs - 2);
+        })
+        .fold<double>(0, (a, b) => a > b ? a : b);
+
+    // Largeur utile de la piste : sa marge intérieure et son filet en moins.
+    final double utile = largeur - Espace.xxs * 2 - 2;
+    for (int n = initial; n > 1; n--) {
+      if (utile / n >= plusLarge) return n;
+    }
+    return 1;
+  }
+
+  Widget _choix(BuildContext context, int parLigne) {
     final theme = Theme.of(context);
+    final bool clair = theme.brightness == Brightness.light;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        DefaultTextStyle.merge(
-          style: theme.textTheme.labelMedium,
-          child: obligatoire
-              ? libelleObligatoire(context, libelle)
-              : Text(libelle),
-        ),
-        const SizedBox(height: Espace.xs),
-        SegmentedButton<T>(
-          segments: <ButtonSegment<T>>[
-            for (final T option in options)
-              ButtonSegment<T>(value: option, label: Text(etiquette(option))),
-          ],
-          selected: valeur == null ? <T>{} : <T>{valeur as T},
-          emptySelectionAllowed: true,
-          showSelectedIcon: false,
-          onSelectionChanged: (choix) => onChange(choix.first),
-          style: SegmentedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
+        Container(
+          padding: const EdgeInsets.all(Espace.xxs),
+          decoration: BoxDecoration(
+            // Piste blanche en clair, comme les champs : l'option retenue se
+            // distingue par son vert pâle, pas par un fond gris autour d'elle.
+            color: clair ? theme.colorScheme.surface : AppColors.pisteSombre,
+            borderRadius: BorderRadius.circular(Rayon.champ),
+            border: Border.all(
+              color: erreur != null
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.outlineVariant,
+            ),
+          ),
+          child: Column(
+            children: <Widget>[
+              for (int debut = 0; debut < options.length; debut += parLigne)
+                Row(
+                  children: <Widget>[
+                    for (int i = debut; i < debut + parLigne; i++)
+                      Expanded(
+                        child: i < options.length
+                            ? _Segment(
+                                libelle: etiquette(options[i]),
+                                icone: icone?.call(options[i]),
+                                choisi: options[i] == valeur,
+                                onTap: () => onChange(options[i]),
+                              )
+                            // Case vide : garde la largeur des colonnes
+                            // quand la dernière ligne est incomplète.
+                            : const SizedBox.shrink(),
+                      ),
+                  ],
+                ),
+            ],
           ),
         ),
         if (erreur != null)
@@ -412,6 +610,219 @@ class ChoixSegmente<T> extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.libelle,
+    required this.choisi,
+    required this.onTap,
+    this.icone,
+  });
+
+  final String libelle;
+  final DonneesIcone? icone;
+  final bool choisi;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final bool clair = theme.brightness == Brightness.light;
+    // Rayon intérieur = rayon de la piste moins sa marge : les deux courbes
+    // restent parallèles.
+    final BorderRadius arrondi = BorderRadius.circular(
+      Rayon.champ - Espace.xxs,
+    );
+    final Color couleur = choisi ? scheme.primary : scheme.onSurfaceVariant;
+    final Widget texte = Text(
+      libelle,
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+
+    return Semantics(
+      button: true,
+      selected: choisi,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: Duree.rapide,
+          curve: Curves.easeOut,
+          constraints: const BoxConstraints(minHeight: 42),
+          padding: const EdgeInsets.symmetric(
+            horizontal: Espace.xxs,
+            vertical: Espace.xs,
+          ),
+          alignment: Alignment.center,
+          decoration: clair
+              // Option retenue en vert pâle cerné de vert : le langage des
+              // tuiles de « Mon dossier ».
+              ? BoxDecoration(
+                  color: choisi
+                      ? AppColors.vertPale.withValues(alpha: 0.6)
+                      : Colors.transparent,
+                  borderRadius: arrondi,
+                  border: Border.all(
+                    color: choisi
+                        ? scheme.primary.withValues(alpha: 0.45)
+                        : Colors.transparent,
+                  ),
+                )
+              : BoxDecoration(
+                  color: choisi ? scheme.surface : Colors.transparent,
+                  borderRadius: arrondi,
+                  boxShadow: choisi
+                      ? <BoxShadow>[
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 6,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : const <BoxShadow>[],
+                ),
+          child: AnimatedDefaultTextStyle(
+            duration: Duree.rapide,
+            style: theme.textTheme.bodyMedium!.copyWith(
+              fontWeight: choisi ? FontWeight.w600 : FontWeight.w400,
+              color: couleur,
+            ),
+            child: icone == null
+                ? texte
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icone(icone!, taille: 18, couleur: couleur),
+                      const SizedBox(width: Espace.xs - 2),
+                      Flexible(child: texte),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Saisie d'un petit nombre entier par boutons − / +, comme sur le web.
+///
+/// Plus sûr qu'un clavier numérique pour un nombre d'enfants : pas de valeur
+/// négative, pas de « 1O » tapé au pouce.
+class ChampCompteur extends StatelessWidget {
+  const ChampCompteur({
+    required this.libelle,
+    required this.valeur,
+    required this.onChange,
+    this.minimum = 0,
+    this.maximum = 30,
+    this.erreur,
+    this.obligatoire = false,
+    this.facultatif = false,
+    super.key,
+  });
+
+  final String libelle;
+  final int valeur;
+  final ValueChanged<int> onChange;
+  final int minimum;
+  final int maximum;
+  final String? erreur;
+  final bool obligatoire;
+  final bool facultatif;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final BorderSide trait = BorderSide(
+      color: erreur != null
+          ? theme.colorScheme.error
+          : theme.colorScheme.outlineVariant,
+    );
+
+    Widget bouton(
+      DonneesIcone icone,
+      String description,
+      VoidCallback? action,
+    ) => Semantics(
+      button: true,
+      label: description,
+      child: InkWell(
+        onTap: action,
+        child: SizedBox(
+          width: 52,
+          height: 48,
+          child: Center(
+            child: Icone(
+              icone,
+              taille: 18,
+              couleur: action == null
+                  ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+                  : theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return ChampLibelle(
+      libelle: libelle,
+      obligatoire: obligatoire,
+      facultatif: facultatif,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Material(
+            color: theme.colorScheme.surface,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Rayon.champ),
+              side: trait,
+            ),
+            child: Row(
+              children: <Widget>[
+                bouton(
+                  Icones.moins,
+                  'Diminuer',
+                  valeur > minimum ? () => onChange(valeur - 1) : null,
+                ),
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      border: Border(left: trait, right: trait),
+                    ),
+                    child: Text('$valeur', style: theme.textTheme.bodyLarge),
+                  ),
+                ),
+                bouton(
+                  Icones.ajouter,
+                  'Augmenter',
+                  valeur < maximum ? () => onChange(valeur + 1) : null,
+                ),
+              ],
+            ),
+          ),
+          if (erreur != null)
+            Padding(
+              padding: const EdgeInsets.only(top: Espace.xxs, left: Espace.sm),
+              child: Text(
+                erreur!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -430,6 +841,7 @@ class ChampDate extends StatelessWidget {
     this.premiereDate,
     this.derniereDate,
     this.obligatoire = false,
+    this.facultatif = false,
     super.key,
   });
 
@@ -441,40 +853,44 @@ class ChampDate extends StatelessWidget {
   final DateTime? premiereDate;
   final DateTime? derniereDate;
   final bool obligatoire;
+  final bool facultatif;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final DateTime aujourdhui = DateTime.now();
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(Rayon.pilule),
-      onTap: () async {
-        final DateTime? choix = await showDatePicker(
-          context: context,
-          initialDate: valeur ?? DateTime(aujourdhui.year - 25),
-          firstDate: premiereDate ?? DateTime(aujourdhui.year - 80),
-          lastDate: derniereDate ?? aujourdhui,
-          locale: const Locale('fr', 'FR'),
-        );
-        if (choix != null) onChange(choix);
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: obligatoire ? null : libelle,
-          label: obligatoire ? libelleObligatoire(context, libelle) : null,
-          errorText: erreur,
-          prefixIcon: icone == null ? null : PrefixeChamp(icone!),
-          suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedCalendar03),
-        ),
-        child: Text(
-          valeur == null
-              ? 'Sélectionner'
-              : DateFormat('dd/MM/yyyy', 'fr_FR').format(valeur!),
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: valeur == null
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.onSurface,
+    return ChampLibelle(
+      libelle: libelle,
+      obligatoire: obligatoire,
+      facultatif: facultatif,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Rayon.champ),
+        onTap: () async {
+          final DateTime? choix = await showDatePicker(
+            context: context,
+            initialDate: valeur ?? DateTime(aujourdhui.year - 25),
+            firstDate: premiereDate ?? DateTime(aujourdhui.year - 80),
+            lastDate: derniereDate ?? aujourdhui,
+            locale: const Locale('fr', 'FR'),
+          );
+          if (choix != null) onChange(choix);
+        },
+        child: InputDecorator(
+          decoration: InputDecoration(
+            errorText: erreur,
+            prefixIcon: icone == null ? null : PrefixeChamp(icone!),
+            suffixIcon: const SuffixeChamp(HugeIcons.strokeRoundedCalendar03),
+          ),
+          child: Text(
+            valeur == null
+                ? 'Sélectionner'
+                : DateFormat('dd/MM/yyyy', 'fr_FR').format(valeur!),
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: valeur == null
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.onSurface,
+            ),
           ),
         ),
       ),

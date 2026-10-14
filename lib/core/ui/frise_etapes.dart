@@ -4,24 +4,162 @@ import '../theme/app_colors.dart';
 import '../theme/app_dimens.dart';
 import 'icone.dart';
 
-/// Diamètre d'une pastille — et donc largeur de la colonne du rail. Les deux
-/// doivent rester égaux, sinon les pastilles cessent d'être centrées sur le
+/// Côté d'une tuile d'étape — et donc largeur de la colonne du rail. Les deux
+/// doivent rester égaux, sinon les tuiles cessent d'être centrées sur le
 /// trait qui les relie.
-const double _diametrePastille = 34;
+const double coteTuileEtape = 44;
 
-/// Épaisseur du trait reliant les pastilles.
-const double _largeurRail = 2.5;
-
-/// État d'une étape dans la frise.
+/// État d'une étape dans une frise.
 enum EtatEtape {
-  /// Franchie : pastille pleine et coche.
+  /// Franchie : tuile verte pleine, trait plein jusqu'à la suivante.
   franchie,
 
-  /// En cours : anneau vert sur halo jaune. Une seule étape à la fois.
+  /// En cours : tuile verte pleine **avec halo**. Une seule étape à la fois.
   enCours,
 
-  /// À venir : contour discret, numéro en gris.
+  /// À venir : tuile vert pâle, trait pointillé.
   aVenir,
+}
+
+/// Tuile carrée arrondie d'une étape, dessinée comme sur la plateforme web.
+///
+/// Partagée par la frise verticale de l'accueil et la frise horizontale du
+/// wizard : un candidat doit reconnaître la même étape aux deux endroits.
+class TuileEtape extends StatelessWidget {
+  const TuileEtape({
+    required this.etat,
+    this.icone,
+    this.numero,
+    this.cote = coteTuileEtape,
+    super.key,
+  });
+
+  final EtatEtape etat;
+
+  /// Pictogramme de l'étape. À défaut, la tuile affiche [numero].
+  final DonneesIcone? icone;
+  final int? numero;
+
+  /// Côté de la tuile. Pictogramme, rayon et halo suivent ses proportions,
+  /// pour qu'une tuile compacte garde l'allure de la grande.
+  final double cote;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final bool clair = theme.brightness == Brightness.light;
+    final bool pleine = etat != EtatEtape.aVenir;
+    final Color encre = pleine ? scheme.onPrimary : scheme.primary;
+
+    return AnimatedContainer(
+      duration: Duree.moyenne,
+      curve: Curves.easeOutCubic,
+      width: cote,
+      height: cote,
+      decoration: BoxDecoration(
+        color: pleine
+            ? scheme.primary
+            : (clair
+                  ? AppColors.vertPale.withValues(alpha: 0.6)
+                  : scheme.primaryContainer),
+        borderRadius: BorderRadius.circular(cote * 0.27),
+        boxShadow: etat == EtatEtape.enCours
+            ? <BoxShadow>[
+                // Le halo du web : un anneau vert diffus autour de l'étape en
+                // cours, seule à le porter.
+                BoxShadow(
+                  color: scheme.primary.withValues(alpha: 0.22),
+                  spreadRadius: cote / 11,
+                ),
+              ]
+            : const <BoxShadow>[],
+      ),
+      child: Center(
+        child: icone != null
+            ? Icone(icone!, taille: cote * 0.45, couleur: encre)
+            : Text(
+                '${numero ?? ''}',
+                style: theme.textTheme.titleMedium?.copyWith(color: encre),
+              ),
+      ),
+    );
+  }
+}
+
+/// Trait entre deux tuiles : plein et vert sur le chemin parcouru,
+/// pointillé et gris au-delà.
+class TraitEtape extends StatelessWidget {
+  const TraitEtape({
+    required this.franchi,
+    this.axe = Axis.horizontal,
+    super.key,
+  });
+
+  final bool franchi;
+  final Axis axe;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<Color?>(
+      duration: Duree.moyenne,
+      tween: ColorTween(end: franchi ? scheme.primary : scheme.outlineVariant),
+      builder: (context, couleur, _) => CustomPaint(
+        size: axe == Axis.horizontal
+            ? const Size(double.infinity, 2)
+            : const Size(2, double.infinity),
+        painter: _PeintreTrait(
+          couleur: couleur ?? scheme.outlineVariant,
+          plein: franchi,
+          axe: axe,
+        ),
+      ),
+    );
+  }
+}
+
+class _PeintreTrait extends CustomPainter {
+  const _PeintreTrait({
+    required this.couleur,
+    required this.plein,
+    required this.axe,
+  });
+
+  final Color couleur;
+  final bool plein;
+  final Axis axe;
+
+  static const double _tiret = 4;
+  static const double _espace = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint pinceau = Paint()
+      ..color = couleur
+      ..strokeWidth = plein ? 2 : 1.5
+      ..strokeCap = StrokeCap.round;
+    final bool horizontal = axe == Axis.horizontal;
+    final double longueur = horizontal ? size.width : size.height;
+    Offset point(double t) =>
+        horizontal ? Offset(t, size.height / 2) : Offset(size.width / 2, t);
+
+    if (plein) {
+      canvas.drawLine(point(0), point(longueur), pinceau);
+      return;
+    }
+    for (double t = 0; t < longueur; t += _tiret + _espace) {
+      canvas.drawLine(
+        point(t),
+        point((t + _tiret).clamp(0, longueur)),
+        pinceau,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PeintreTrait ancien) =>
+      ancien.couleur != couleur || ancien.plein != plein || ancien.axe != axe;
 }
 
 @immutable
@@ -30,6 +168,7 @@ class ElementFrise {
     required this.numero,
     required this.titre,
     required this.etat,
+    this.icone,
     this.statut,
     this.description,
     this.onTap,
@@ -38,6 +177,9 @@ class ElementFrise {
   final int numero;
   final String titre;
   final EtatEtape etat;
+
+  /// Pictogramme de la tuile ; à défaut, le numéro.
+  final DonneesIcone? icone;
 
   /// Pastille d'état — « Complétée », « En cours ». Absente pour une étape
   /// à venir : lui coller « À faire » n'apprendrait rien.
@@ -49,10 +191,9 @@ class ElementFrise {
 
 /// Frise verticale des étapes d'un parcours.
 ///
-/// Le rail relie les pastilles entre elles et se colore jusqu'à l'endroit
-/// atteint : la progression se lit d'un coup d'œil, sans compter les coches.
-/// C'est ce qu'une liste de cartes ne sait pas faire — elle juxtapose là où
-/// une frise raconte un chemin.
+/// Mêmes tuiles et mêmes traits que la frise horizontale du formulaire web :
+/// seule l'orientation change, parce qu'un téléphone a de la hauteur et pas
+/// de largeur — et que la frise de l'accueil porte un statut par étape.
 ///
 /// Les hauteurs de ligne sont libres : le rail s'étire sur la hauteur réelle
 /// de sa ligne, pas sur une constante qui casserait dès qu'un titre passe sur
@@ -145,30 +286,39 @@ class _Ligne extends StatelessWidget {
     ),
     child: Stack(
       children: <Widget>[
-        // Le rail part sous la pastille et descend jusqu'au bas de la ligne,
-        // où l'attend la pastille suivante.
+        // Le rail part sous la tuile et descend jusqu'au bas de la ligne, où
+        // l'attend la tuile suivante.
         //
         // `Positioned` avec `top` **et** `bottom` lui donne la hauteur réelle
         // de la ligne. Passer par `IntrinsicHeight` obligerait chaque
-        // descendant à savoir dire sa hauteur — ce qu'un trait large de
-        // 2,5 px et de hauteur libre ne sait pas faire.
+        // descendant à savoir dire sa hauteur — ce qu'un trait de hauteur
+        // libre ne sait pas faire.
         if (!derniere)
           Positioned(
-            top: _diametrePastille,
+            top: coteTuileEtape,
             bottom: 0,
-            left: (_diametrePastille - _largeurRail) / 2,
-            width: _largeurRail,
-            child: _Rail(
+            left: 0,
+            width: coteTuileEtape,
+            child: Padding(
+              // Laisse un jour entre le trait et les tuiles, et la place du
+              // halo de l'étape en cours.
+              padding: const EdgeInsets.symmetric(vertical: Espace.xs),
               // Le rail ne se colore que sous une étape franchie : il
               // matérialise le chemin déjà parcouru.
-              franchi: element.etat == EtatEtape.franchie,
-              avancement: avancement,
+              child: TraitEtape(
+                franchi: element.etat == EtatEtape.franchie,
+                axe: Axis.vertical,
+              ),
             ),
           ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _Pastille(etat: element.etat, numero: element.numero),
+            TuileEtape(
+              etat: element.etat,
+              icone: element.icone,
+              numero: element.numero,
+            ),
             const SizedBox(width: Espace.sm),
             Expanded(
               child: _Contenu(element: element, derniere: derniere),
@@ -178,129 +328,6 @@ class _Ligne extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _Pastille extends StatelessWidget {
-  const _Pastille({required this.etat, required this.numero});
-
-  final EtatEtape etat;
-  final int numero;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-
-    return SizedBox.square(
-      dimension: _diametrePastille,
-      child: switch (etat) {
-        EtatEtape.franchie => DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.primary,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Icone(Icones.valide, taille: 17, couleur: scheme.onPrimary),
-          ),
-        ),
-
-        // Le halo jaune n'apparaît qu'ici : c'est l'unique accent de la
-        // palette, réservé à l'étape en cours.
-        EtatEtape.enCours => DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.jaune.withValues(alpha: 0.30),
-          ),
-          child: Center(
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: scheme.primary, width: 2.5),
-              ),
-              child: Center(
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        EtatEtape.aVenir => DecoratedBox(
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            shape: BoxShape.circle,
-            border: Border.all(color: scheme.outlineVariant, width: 1.5),
-          ),
-          child: Center(
-            child: Text(
-              '$numero',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      },
-    );
-  }
-}
-
-/// Segment du rail, entre deux pastilles.
-class _Rail extends StatelessWidget {
-  const _Rail({required this.franchi, required this.avancement});
-
-  final bool franchi;
-  final Animation<double> avancement;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final BorderRadius arrondi = BorderRadius.circular(_largeurRail);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: scheme.outlineVariant,
-              borderRadius: arrondi,
-            ),
-          ),
-          if (franchi)
-            // Le trait vert descend au rythme de l'apparition de la ligne.
-            //
-            // Son propre `AnimatedBuilder` est indispensable : le reste de la
-            // ligne est passé en `child` au builder parent, donc construit une
-            // seule fois. Lire `avancement.value` là-haut donnerait une valeur
-            // figée, et le rail ne descendrait jamais.
-            AnimatedBuilder(
-              animation: avancement,
-              builder: (context, _) => FractionallySizedBox(
-                alignment: Alignment.topCenter,
-                heightFactor: avancement.value.clamp(0, 1),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: arrondi,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _Contenu extends StatelessWidget {
@@ -318,7 +345,7 @@ class _Contenu extends StatelessWidget {
       padding: EdgeInsets.only(bottom: derniere ? 0 : Espace.lg),
       child: InkWell(
         onTap: element.onTap,
-        borderRadius: BorderRadius.circular(Rayon.md),
+        borderRadius: BorderRadius.circular(Rayon.champ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Espace.xs,
@@ -357,7 +384,7 @@ class _Contenu extends StatelessWidget {
               ],
               if (element.statut case final String statut) ...<Widget>[
                 const SizedBox(height: Espace.xs),
-                _Pastilleteinte(statut: statut, etat: element.etat),
+                _PastilleStatut(statut: statut, etat: element.etat),
               ],
             ],
           ),
@@ -367,15 +394,16 @@ class _Contenu extends StatelessWidget {
   }
 }
 
-class _Pastilleteinte extends StatelessWidget {
-  const _Pastilleteinte({required this.statut, required this.etat});
+class _PastilleStatut extends StatelessWidget {
+  const _PastilleStatut({required this.statut, required this.etat});
 
   final String statut;
   final EtatEtape etat;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
     final bool franchie = etat == EtatEtape.franchie;
 
     return Container(
@@ -384,12 +412,14 @@ class _Pastilleteinte extends StatelessWidget {
         vertical: 3,
       ),
       decoration: BoxDecoration(
+        // « À remplir » garde le jaune : c'est l'unique accent de la
+        // palette, réservé à ce qui attend le candidat.
         color: franchie ? AppColors.vertPale : scheme.secondaryContainer,
         borderRadius: BorderRadius.circular(Rayon.pilule),
       ),
       child: Text(
         statut,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        style: theme.textTheme.bodySmall?.copyWith(
           fontSize: 11.5,
           fontWeight: FontWeight.w600,
           color: franchie

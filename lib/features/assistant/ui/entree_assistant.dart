@@ -32,6 +32,12 @@ class EntreeAssistant extends StatefulWidget {
   /// l'écran au dossier — lequel reste la raison d'être de la page.
   static const double hauteur = 92;
 
+  /// Hauteur totale occupée — personnage et étiquette « Ndimbal ».
+  ///
+  /// Sert aux pages qui l'accueillent à réserver sa place en bas de leur
+  /// contenu, pour que rien d'important ne finisse caché dessous.
+  static const double emprise = hauteur + 30;
+
   /// Intervalle entre deux saluts.
   ///
   /// Assez espacé pour qu'on ne le voie pas venir, assez fréquent pour qu'on
@@ -98,10 +104,7 @@ class _EntreeAssistantState extends State<EntreeAssistant> {
                 fit: BoxFit.contain,
                 child: Ndimbal(taille: EntreeAssistant.hauteur),
               ),
-              child: Ndimbal(
-                taille: EntreeAssistant.hauteur,
-                pose: _pose,
-              ),
+              child: Ndimbal(taille: EntreeAssistant.hauteur, pose: _pose),
             ),
             // Le personnage seul ne dit pas qu'on peut lui parler. Une
             // étiquette discrète vaut mieux qu'un robot muet dans un coin,
@@ -149,9 +152,6 @@ class PastilleNdimbal extends StatelessWidget {
   final bool anime;
 
   @override
-  Widget build(BuildContext context) => Ndimbal(
-    taille: taille,
-    forme: FormeNdimbal.pastille,
-    anime: anime,
-  );
+  Widget build(BuildContext context) =>
+      Ndimbal(taille: taille, forme: FormeNdimbal.pastille, anime: anime);
 }

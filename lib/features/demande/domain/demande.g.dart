@@ -60,6 +60,7 @@ Map<String, dynamic> _$ExperienceToJson(_Experience instance) =>
 
 _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
   deposee: json['deposee'] as bool? ?? false,
+  numeroDossier: (json['numeroDossier'] as num?)?.toInt(),
   dateNaissance: const DateOnlyConverter().fromJson(
     json['dateNaissance'] as String?,
   ),
@@ -109,6 +110,7 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
 
 Map<String, dynamic> _$DemandeToJson(_Demande instance) => <String, dynamic>{
   'deposee': instance.deposee,
+  'numeroDossier': instance.numeroDossier,
   'dateNaissance': const DateOnlyConverter().toJson(instance.dateNaissance),
   'lieuNaissance': instance.lieuNaissance,
   'lieuResidence': instance.lieuResidence,

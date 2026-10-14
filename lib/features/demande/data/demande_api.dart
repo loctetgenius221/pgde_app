@@ -12,17 +12,9 @@ import 'demande_mock_api.dart';
 
 /// Le dossier du candidat — modules 3 et 4 du contrat d'interface.
 ///
-/// Aucun identifiant dans les URL : le dossier est déduit de l'utilisateur
-/// authentifié. Cela **supprime par construction** la classe de failles IDOR
-/// corrigée à la main dans le contrôleur web.
-///
-/// L'écriture est découpée en quatre `PUT`, un par étape (§5.2 à §5.5).
-/// C'est un changement de fond par rapport au `PUT` global précédent :
-/// enregistrer une étape ne peut plus effacer les autres, et un 422 désigne
-/// sans ambiguïté l'étape fautive — c'est celle qu'on venait d'envoyer.
+/// Aucun identifiant dans les URL : le dossier est déduit du jeton. L'écriture
+/// est découpée en quatre `PUT`, un par étape (§5.2 à §5.5).
 abstract interface class DemandeApi {
-  /// §5.1 — le profil complet, ou `null` si le candidat n'a encore rien
-  /// rempli.
   Future<Demande?> mien();
 
   Future<void> enregistrerIdentite(Demande demande);
@@ -33,28 +25,18 @@ abstract interface class DemandeApi {
 
   Future<void> enregistrerVoeux(Demande demande);
 
-  // --- Pièces jointes (§6) ---
-  //
-  // Trois routes dédiées, une par nature de pièce. Elles renvoient la pièce
-  // déposée, pas le dossier entier : on n'en adopte donc que ce qui change.
-
-  /// §6.1 — remplace la photo de profil. Le serveur n'en garde qu'une.
+  /// §6.1 — champ multipart `photo`.
   Future<FichierJoint> deposerPhoto(File fichier);
 
-  /// §6.4 — justificatif d'une formation. [formationIndex] est le rang de la
-  /// formation dans la liste envoyée à `PUT /candidat/formations`.
-  Future<FichierJoint> deposerDiplome({
-    required File fichier,
-    required int formationIndex,
-  });
+  /// §6.4 — champ multipart `diplome_file`. Le `file_path` retourné doit
+  /// ensuite partir dans `PUT /candidat/formations`.
+  Future<FichierJoint> deposerDiplome(File fichier);
 
-  /// §6.2 — le CV. Retiré de la saisie aujourd'hui, la route reste couverte
-  /// pour que le rétablir ne coûte qu'un écran.
+  /// §6.2 — champ multipart `cv_file`.
   Future<FichierJoint> deposerCv(File fichier);
 
-  /// §6.3 — le contrat n'expose **aucune suppression de justificatif de
-  /// diplôme** : seul le CV peut être retiré.
-  Future<void> supprimerCv();
+  /// §6.3 — le chemin doit appartenir à `cv_files` du compte.
+  Future<void> supprimerCv(String filePath);
 }
 
 class HttpDemandeApi implements DemandeApi {
@@ -69,17 +51,14 @@ class HttpDemandeApi implements DemandeApi {
       if (data is! Map) return null;
       return DemandeMapper.depuisApi(data.cast<String, dynamic>());
     } on ApiException catch (e) {
-      // 404 n'est pas une erreur : c'est un candidat qui n'a rien rempli.
       if (e.isNotFound) return null;
       rethrow;
     }
   }
 
   @override
-  Future<void> enregistrerIdentite(Demande demande) => _client.put(
-    '/candidat/identity',
-    body: DemandeMapper.identite(demande),
-  );
+  Future<void> enregistrerIdentite(Demande demande) =>
+      _client.put('/candidat/identity', body: DemandeMapper.identite(demande));
 
   @override
   Future<void> enregistrerFormations(Demande demande) => _client.put(
@@ -94,43 +73,36 @@ class HttpDemandeApi implements DemandeApi {
   );
 
   @override
-  Future<void> enregistrerVoeux(Demande demande) => _client.put(
-    '/candidat/target-jobs',
-    body: DemandeMapper.voeux(demande),
-  );
+  Future<void> enregistrerVoeux(Demande demande) =>
+      _client.put('/candidat/target-jobs', body: DemandeMapper.voeux(demande));
 
   @override
   Future<FichierJoint> deposerPhoto(File fichier) async {
     final Json data = await _envoyer(
       '/candidat/files/photo',
-      champ: 'photo_profil',
+      champ: 'photo',
       fichier: fichier,
     );
     return FichierJoint(
-      chemin: _texte(data['photo_profil_url']),
-      url: _texte(data['photo_profil_url']),
+      chemin: _texte(data['photo_path'] ?? data['photo_url']),
+      url: _texte(data['photo_url'] ?? data['photo_path']),
       nom: _nomDe(fichier),
     );
   }
 
   @override
-  Future<FichierJoint> deposerDiplome({
-    required File fichier,
-    required int formationIndex,
-  }) async {
+  Future<FichierJoint> deposerDiplome(File fichier) async {
     final Json data = await _envoyer(
       '/candidat/files/diplome',
       champ: 'diplome_file',
       fichier: fichier,
-      // §6.4 — c'est **ce champ** qui rattache le document à sa formation.
-      champsSupplementaires: <String, dynamic>{
-        'formation_index': formationIndex,
-      },
     );
     return FichierJoint(
       chemin: _texte(data['file_path']),
       url: _texte(data['file_url']),
-      nom: _nomDe(fichier),
+      nom: _texte(data['file_name']).isEmpty
+          ? _nomDe(fichier)
+          : _texte(data['file_name']),
       taille: fichier.existsSync() ? fichier.lengthSync() : null,
     );
   }
@@ -143,42 +115,38 @@ class HttpDemandeApi implements DemandeApi {
       fichier: fichier,
     );
     return FichierJoint(
-      chemin: _texte(data['cv_url']),
-      url: _texte(data['cv_url']),
-      nom: _texte(data['cv_file_name']),
+      chemin: _texte(data['file_path']),
+      url: _texte(data['file_url']),
+      nom: _texte(data['file_name']),
       taille: fichier.existsSync() ? fichier.lengthSync() : null,
     );
   }
 
   @override
-  Future<void> supprimerCv() => _client.delete('/candidat/files/cv');
+  Future<void> supprimerCv(String filePath) => _client.delete(
+    '/candidat/files/cv',
+    body: <String, dynamic>{'file_path': filePath},
+  );
 
   Future<Json> _envoyer(
     String chemin, {
     required String champ,
     required File fichier,
-    Json? champsSupplementaires,
   }) async {
-    final FormData corps = FormData();
-    if (champsSupplementaires != null) {
-      for (final MapEntry<String, dynamic> e in champsSupplementaires.entries) {
-        corps.fields.add(MapEntry(e.key, e.value.toString()));
-      }
-    }
-    corps.files.add(
-      MapEntry(
-        champ,
-        await MultipartFile.fromFile(fichier.path, filename: _nomDe(fichier)),
+    final FormData corps = FormData.fromMap(<String, dynamic>{
+      champ: await MultipartFile.fromFile(
+        fichier.path,
+        filename: _nomDe(fichier),
       ),
-    );
-
+    });
     final Object? data = await _client.post(chemin, body: corps);
-    return data is Map ? data.cast<String, dynamic>() : const <String, dynamic>{};
+    return data is Map
+        ? data.cast<String, dynamic>()
+        : const <String, dynamic>{};
   }
 
   static String _texte(Object? valeur) => valeur?.toString() ?? '';
 
-  /// Nom de fichier, quel que soit le séparateur de la plateforme.
   static String _nomDe(File fichier) =>
       fichier.path.split(RegExp(r'[\\/]')).last;
 }

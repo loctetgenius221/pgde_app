@@ -70,8 +70,6 @@ class MockDemandeApi implements DemandeApi {
       ),
       EtapeEcriture.formations => actuel.copyWith(
         deposee: true,
-        // `existing_diplome_file` conserve le justificatif déjà déposé : on
-        // repart des formations envoyées, justificatifs compris.
         formations: envoye.formations,
       ),
       EtapeEcriture.experiences => actuel.copyWith(
@@ -103,21 +101,9 @@ class MockDemandeApi implements DemandeApi {
   }
 
   @override
-  Future<FichierJoint> deposerDiplome({
-    required File fichier,
-    required int formationIndex,
-  }) async {
+  Future<FichierJoint> deposerDiplome(File fichier) async {
     await Future<void>.delayed(_latence);
-    final Demande actuel = _exigeUnDossier();
-    if (formationIndex >= actuel.formations.length) {
-      throw const ApiException(
-        'Enregistrez d’abord cette formation avant d’y joindre un document.',
-        statusCode: 422,
-      );
-    }
-    final FichierJoint piece = _enregistrerFichier(fichier, 'uploads/diplomes');
-    _dossier = actuel.avecJustificatif(formationIndex, piece);
-    return piece;
+    return _enregistrerFichier(fichier, 'diplomes/15');
   }
 
   @override
@@ -130,9 +116,12 @@ class MockDemandeApi implements DemandeApi {
   }
 
   @override
-  Future<void> supprimerCv() async {
+  Future<void> supprimerCv(String filePath) async {
     await Future<void>.delayed(_latence);
-    _dossier = _exigeUnDossier().copyWith(cv: const <FichierJoint>[]);
+    final Demande actuel = _exigeUnDossier();
+    _dossier = actuel.copyWith(
+      cv: actuel.cv.where((p) => p.chemin != filePath).toList(),
+    );
   }
 
   Demande _exigeUnDossier() {
@@ -177,15 +166,12 @@ class MockDemandeApi implements DemandeApi {
         'situationmatrimoniale': identite['situationmatrimoniale'],
         'nombreenfant': identite['nombreenfant'],
         'lieuresidence': identite['lieuresidence'],
-        'addresse': identite['addresse'],
         'region_naissance': _entite(identite['regionnaiss_id']),
         'departement_naissance': _entite(identite['departementnaiss_id']),
         'region_residence': _entite(identite['regionresidence_id']),
         'departement_residence': _entite(identite['departementresidence_id']),
-        // §5.1 ne rend que le type résolu : répondre « oui » sans préciser
-        // le type ne survit donc pas à l'aller-retour. C'est une perte réelle
-        // du contrat, et elle doit se voir.
         'handicap': _entite(identite['handicap_id']),
+        'has_handicap': identite['has_handicap'] == true,
         'photo_profil_url': d.photo?.url,
       },
       'formations': <Json>[
@@ -197,10 +183,12 @@ class MockDemandeApi implements DemandeApi {
             'anneediplome': f.sansDiplome ? null : f.anneeDiplome,
             'specialite': f.sansDiplome ? null : f.specialite,
             'etablissementdiplome': f.sansDiplome ? null : f.etablissement,
+            'diplome_file': f.justificatif?.chemin,
             'diplome_file_url': f.justificatif?.url,
             'diplome_file_name': f.justificatif?.nom,
           },
       ],
+      'has_experience': d.aDeLExperience == true,
       'experiences': <Json>[
         for (final Experience e in d.experiencesRetenues)
           <String, dynamic>{
@@ -233,9 +221,9 @@ class MockDemandeApi implements DemandeApi {
     };
   }
 
-  /// Entité résolue `{id, nom}` telle que la rend le serveur, ou `null`.
+  /// Entité résolue `{id, libelle}` telle que la rend le serveur, ou `null`.
   static Json? _entite(Object? id) =>
-      id == null ? null : <String, dynamic>{'id': id, 'nom': ''};
+      id == null ? null : <String, dynamic>{'id': id, 'libelle': ''};
 }
 
 /// Les quatre tranches d'écriture du contrat (§5.2 à §5.5).

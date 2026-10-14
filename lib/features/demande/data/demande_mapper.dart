@@ -6,20 +6,14 @@ import '../domain/demande.dart';
 
 /// Correspondance entre le modèle de l'app et le contrat d'interface v1.
 ///
-/// La lecture est **une** ressource imbriquée (`GET /candidat/profile`, §5.1)
-/// tandis que l'écriture est **quatre** corps à plat, un par étape (§5.2 à
-/// §5.5). Une sérialisation générée ne peut donc pas servir les deux : la
-/// correspondance est écrite à la main, ici, et nulle part ailleurs.
-///
-/// C'est aussi le seul endroit qui connaît les tournures du contrat —
-/// `hasExperience: "oui"`, `academic_id: "sansdiplome"`, les entités
-/// résolues en `{id, nom}`.
+/// Lecture : une ressource imbriquée (`GET /candidat/profile`, §5.1).
+/// Écriture : quatre corps à plat, un par étape (§5.2 à §5.5).
 abstract final class DemandeMapper {
   static const DateOnlyConverter _date = DateOnlyConverter();
 
-  // -------------------------------------------------------------------------
-  // Lecture — §5.1
-  // -------------------------------------------------------------------------
+  /// Avatar générique renvoyé par le serveur quand le candidat n'a pas de
+  /// photo (`photo_profil_url`, §5.1).
+  static const String _avatarParDefaut = '/images/images.png';
 
   static Demande depuisApi(Json data) {
     final Json identite = _objet(data['identity']);
@@ -27,19 +21,13 @@ abstract final class DemandeMapper {
     final List<Json> experiences = _liste(data['experiences']);
 
     return Demande(
-      // La réponse n'existe que si une fiche existe : la recevoir suffit à
-      // savoir que le dossier est déposé.
       deposee: true,
-
+      numeroDossier: _entier(data['candidat_number']),
       dateNaissance: _date.fromJson(_texteOuNull(identite['datenaiss'])),
       lieuNaissance: _texte(identite['lieunaiss']),
       lieuResidence: _texte(identite['lieuresidence']),
-      adresse: _texte(identite['addresse']),
-      genre: _valeurDe(Genre.values, identite['genre']),
-      situationMatrimoniale: _valeurDe(
-        SituationMatrimoniale.values,
-        identite['situationmatrimoniale'],
-      ),
+      genre: Genre.depuis(identite['genre']),
+      situationMatrimoniale: _situation(identite['situationmatrimoniale']),
       telephone1: _texte(identite['telephone1']),
       telephone2: _texte(identite['telephone2']),
       nombreEnfants: _entier(identite['nombreenfant']) ?? 0,
@@ -47,19 +35,17 @@ abstract final class DemandeMapper {
       departementNaissanceId: _identifiant(identite['departement_naissance']),
       regionResidenceId: _identifiant(identite['region_residence']),
       departementResidenceId: _identifiant(identite['departement_residence']),
-      // §5.1 ne renvoie que le type résolu, ou `null` : sa présence **est**
-      // la réponse « oui ».
-      aUnHandicap: _identifiant(identite['handicap']) != null,
+      aUnHandicap:
+          identite['has_handicap'] == true ||
+          _identifiant(identite['handicap']) != null,
       handicapId: _identifiant(identite['handicap']),
       photo: _fichierDepuisUrl(identite['photo_profil_url']),
-
       formations: _liste(data['formations']).map(_formation).toList(),
-
-      // Le contrat ne renvoie **pas** `hasExperience` en lecture (§5.1) :
-      // seule la liste revient. Une liste pleine vaut « oui » ; une liste
-      // vide reste ambiguë — « non » et « pas encore répondu » s'y
-      // confondent. On choisit de ne rien inventer : l'étape se rouvre.
-      aDeLExperience: experiences.isEmpty ? null : true,
+      aDeLExperience: switch (data['has_experience']) {
+        true => true,
+        false => false,
+        _ => experiences.isEmpty ? null : true,
+      },
       experiences: experiences
           .map(
             (e) => Experience(
@@ -70,7 +56,6 @@ abstract final class DemandeMapper {
             ),
           )
           .toList(),
-
       emploi1Id: _identifiant(voeux['emploi1']),
       emploi2Id: _identifiant(voeux['emploi2']),
       anneesExperience1: _entier(voeux['anneeexperience1']) ?? 0,
@@ -86,15 +71,13 @@ abstract final class DemandeMapper {
     anneeDiplome: _entier(j['anneediplome']),
     specialite: _texte(j['specialite']),
     etablissement: _texte(j['etablissementdiplome']),
-    // §5.1 — le justificatif voyage **avec** sa formation.
-    justificatif: _fichierDepuisUrl(
-      j['diplome_file_url'],
-      nom: _texte(j['diplome_file_name']),
-    ),
+    justificatif: _fichier(<String, dynamic>{
+      'file_path': j['diplome_file'] ?? j['diplome_file_path'],
+      'file_url': j['diplome_file_url'],
+      'file_name': j['diplome_file_name'],
+    }),
   );
 
-  /// §5.3 — `academic_id` peut valoir la chaîne `"sansdiplome"`, l'id 20 ou
-  /// l'id 14 selon la version du serveur. Les trois disent la même chose.
   static int _academicId(Json j) {
     if (j['is_sans_diplome'] == true) return Academic.sansDiplomeId;
     final Object? brut = j['academic_id'];
@@ -104,10 +87,12 @@ abstract final class DemandeMapper {
     return _entier(brut) ?? 0;
   }
 
-  /// Pièce décrite par un objet `{file_url, file_name}` (§5.1, `cv_files`).
   static FichierJoint? _fichier(Json j) {
     final String url = _texte(j['file_url'] ?? j['url']);
-    final String chemin = _texte(j['file_path'] ?? j['path']);
+    String chemin = _texte(j['file_path'] ?? j['path'] ?? j['diplome_file']);
+    if (chemin.isEmpty && url.isNotEmpty) {
+      chemin = _cheminDepuisUrl(url) ?? url;
+    }
     if (url.isEmpty && chemin.isEmpty) return null;
     return FichierJoint(
       chemin: chemin.isEmpty ? url : chemin,
@@ -117,17 +102,25 @@ abstract final class DemandeMapper {
     );
   }
 
-  /// Pièce décrite par une simple URL — `photo_profil_url`,
-  /// `diplome_file_url` (§5.1).
-  static FichierJoint? _fichierDepuisUrl(Object? valeur, {String nom = ''}) {
+  static FichierJoint? _fichierDepuisUrl(Object? valeur) {
     final String url = _texte(valeur);
     if (url.isEmpty) return null;
-    return FichierJoint(chemin: url, url: _adresse(url), nom: nom);
+    // Sans photo, le serveur renvoie l'avatar générique du site. Le prendre
+    // pour une photo faisait proposer « Changer la photo » à un candidat qui
+    // n'en a jamais déposé.
+    if (url.endsWith(_avatarParDefaut)) return null;
+    return FichierJoint(
+      chemin: _cheminDepuisUrl(url) ?? url,
+      url: _adresse(url),
+    );
   }
 
-  /// Rend une adresse absolue. Le contrat renvoie des URLs complètes, mais
-  /// afficher une image vide parce qu'une réponse a livré un chemin relatif
-  /// serait un mauvais échange.
+  /// Extrait `diplomes/{id}/{fichier}` d'une URL privée de justificatif.
+  static String? _cheminDepuisUrl(String url) {
+    final Match? match = RegExp(r'(diplomes/\d+/[^/?#]+)').firstMatch(url);
+    return match?.group(1);
+  }
+
   static String _adresse(String chemin) {
     if (chemin.startsWith('http://') || chemin.startsWith('https://')) {
       return chemin;
@@ -138,30 +131,22 @@ abstract final class DemandeMapper {
     return '${Env.racineFichiers}/$relatif';
   }
 
-  // -------------------------------------------------------------------------
-  // Écriture — §5.2 à §5.5
-  //
-  // Quatre corps, quatre endpoints. Chacun n'emporte que sa propre étape :
-  // enregistrer les vœux ne peut plus effacer les formations, ce qui était
-  // le risque principal de l'ancien `PUT` global.
-  // -------------------------------------------------------------------------
-
   /// `PUT /candidat/identity` — §5.2.
   static Json identite(Demande d) => <String, dynamic>{
     'telephone1': d.telephone1,
-    'telephone2': d.telephone2,
+    // Facultatif : absent, il part à `null` comme dans le contrat (§5.2),
+    // pas en chaîne vide qu'une colonne typée pourrait refuser.
+    'telephone2': d.telephone2.trim().isEmpty ? null : d.telephone2.trim(),
     'datenaiss': _date.toJson(d.dateNaissance),
     'lieunaiss': d.lieuNaissance,
     'genre': d.genre?.wire,
     'situationmatrimoniale': d.situationMatrimoniale?.wire,
     'nombreenfant': d.nombreEnfants,
     'lieuresidence': d.lieuResidence,
-    'addresse': d.adresse,
     'regionnaiss_id': d.regionNaissanceId,
     'departementnaiss_id': d.departementNaissanceId,
     'regionresidence_id': d.regionResidenceId,
     'departementresidence_id': d.departementResidenceId,
-    // Un vrai booléen, là où le formulaire web envoyait la chaîne « 0 ».
     'has_handicap': d.aUnHandicap,
     'handicap_id': d.aUnHandicap ? d.handicapId : null,
   };
@@ -171,28 +156,23 @@ abstract final class DemandeMapper {
     'formations': <Json>[
       for (final Formation f in d.formations)
         <String, dynamic>{
-          // La chaîne plutôt que 14 ou 20 : c'est la seule forme que toutes
-          // les versions du serveur interprètent de la même façon.
           'academic_id': f.sansDiplome
               ? Academic.sansDiplomeWire
-              : f.academicId,
+              : '${f.academicId}',
           'diplome': f.sansDiplome ? null : _ouNull(f.diplome),
-          'anneediplome': f.sansDiplome ? null : f.anneeDiplome,
+          'anneediplome': f.sansDiplome ? null : f.anneeDiplome?.toString(),
           'specialite': f.sansDiplome ? null : _ouNull(f.specialite),
           'etablissementdiplome': f.sansDiplome
               ? null
               : _ouNull(f.etablissement),
-          // §5.3 — sans ce rappel, le justificatif déjà déposé serait perdu
-          // à la prochaine modification de la formation.
-          'existing_diplome_file': ?f.justificatif?.chemin,
+          'diplome_file': ?_cheminServeur(f.justificatif),
         },
     ],
   };
 
   /// `PUT /candidat/experiences` — §5.4.
   static Json experiences(Demande d) => <String, dynamic>{
-    // Sans ce « oui » exact, le serveur efface les expériences.
-    'hasExperience': d.aDeLExperience == true ? 'oui' : 'non',
+    'has_experience': d.aDeLExperience == true,
     'experiences': <Json>[
       for (final Experience e in d.experiencesRetenues)
         <String, dynamic>{
@@ -206,20 +186,27 @@ abstract final class DemandeMapper {
 
   /// `PUT /candidat/target-jobs` — §5.5.
   static Json voeux(Demande d) => <String, dynamic>{
-    'emploi1_id': d.emploi1Id,
-    'emploi2_id': d.emploi2Id,
-    'anneeexperience1': d.anneesExperience1,
-    'anneeexperience2': d.anneesExperience2,
     'cv_summary': d.resumeCv,
+    'emploi1_id': d.emploi1Id,
+    'anneeexperience1': d.anneesExperience1,
+    'emploi2_id': d.emploi2Id,
+    'anneeexperience2': d.anneesExperience2,
   };
 
-  // -------------------------------------------------------------------------
-  // Lecture défensive
-  //
-  // Le serveur est en cours d'écriture : son contrat peut encore bouger, et
-  // certaines colonnes sont des chaînes là où on attend des entiers
-  // (`anneediplome: "2022"`). On lit donc sans jamais supposer le type.
-  // -------------------------------------------------------------------------
+  /// Chemin privé à renvoyer au serveur — jamais une URL publique (§5.3).
+  static String? _cheminServeur(FichierJoint? piece) {
+    final String chemin = piece?.chemin.trim() ?? '';
+    if (chemin.isEmpty) return null;
+    if (chemin.startsWith('http://') || chemin.startsWith('https://')) {
+      return _cheminDepuisUrl(chemin);
+    }
+    if (chemin.contains('\\') ||
+        chemin.startsWith('/data') ||
+        chemin.startsWith('/storage')) {
+      return null;
+    }
+    return chemin;
+  }
 
   static String? _ouNull(String valeur) =>
       valeur.trim().isEmpty ? null : valeur;
@@ -246,22 +233,14 @@ abstract final class DemandeMapper {
     _ => null,
   };
 
-  /// Extrait l'`id` d'une entité résolue (`{"id": 1, "nom": …}`), ou l'entier
-  /// brut si le serveur renvoie déjà un identifiant.
   static int? _identifiant(Object? valeur) =>
       valeur is Map ? _entier(_objet(valeur)['id']) : _entier(valeur);
 
-  /// Retrouve une valeur d'énumération depuis sa chaîne réseau.
-  static T? _valeurDe<T extends Enum>(List<T> valeurs, Object? brut) {
+  static SituationMatrimoniale? _situation(Object? brut) {
     if (brut == null) return null;
     final String texte = brut.toString();
-    for (final T valeur in valeurs) {
-      final String attendu = switch (valeur) {
-        final Genre g => g.wire,
-        final SituationMatrimoniale s => s.wire,
-        _ => valeur.name,
-      };
-      if (attendu == texte) return valeur;
+    for (final SituationMatrimoniale s in SituationMatrimoniale.values) {
+      if (s.wire == texte) return s;
     }
     return null;
   }

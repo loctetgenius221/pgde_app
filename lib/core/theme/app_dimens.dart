@@ -15,10 +15,17 @@ abstract final class Espace {
   static const double xxl = 48;
 }
 
-/// Rayons de bordure. Les inspirations reposent sur des formes très arrondies :
-/// cartes à 20, champs à 16, boutons en pilule.
+/// Rayons de bordure.
+///
+/// Les champs, boutons et sélecteurs reprennent le rayon de la plateforme web
+/// ([champ]) : un candidat qui passe de l'un à l'autre retrouve les mêmes
+/// formes, et ne se sent pas sur une autre application.
 abstract final class Rayon {
   static const double sm = 10;
+
+  /// Champs, boutons, sélecteurs segmentés et tuiles d'étape — comme le web.
+  static const double champ = 12;
+
   static const double md = 16;
   static const double lg = 20;
   static const double xl = 28;

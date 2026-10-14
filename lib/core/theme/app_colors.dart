@@ -41,4 +41,22 @@ abstract final class AppColors {
 
   /// Vert clair pour les fonds de badge et d'icône.
   static const Color vertPale = Color(0xFFD9F2E5);
+
+  // --- Formulaires, alignés sur la plateforme web ---
+
+  /// Fond des champs : blanc, comme les cartes de « Mon dossier ». Le filet
+  /// fin suffit à délimiter le champ ; un fond gris alourdissait un
+  /// formulaire de trente champs.
+  static const Color champClair = Color(0xFFFFFFFF);
+
+  /// Champ inactif (« Choisissez d'abord une région ») : le seul à garder un
+  /// fond gris, pour qu'on voie d'un coup d'œil qu'il n'est pas encore
+  /// accessible.
+  static const Color champDesactiveClair = Color(0xFFF4F6F5);
+  static const Color champSombre = Color(0xFF252926);
+
+  /// Piste d'un choix segmenté, sur laquelle l'option retenue se détache en
+  /// blanc.
+  static const Color pisteClaire = Color(0xFFF1F3F4);
+  static const Color pisteSombre = Color(0xFF2A2E2B);
 }

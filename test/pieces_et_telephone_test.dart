@@ -155,7 +155,10 @@ void main() {
 
     test('rattacher et détacher n’affectent que la formation visée', () {
       const Demande dossier = Demande(
-        formations: <Formation>[Formation(academicId: 4), Formation(academicId: 9)],
+        formations: <Formation>[
+          Formation(academicId: 4),
+          Formation(academicId: 9),
+        ],
       );
       const FichierJoint piece = FichierJoint(
         chemin: 'uploads/diplomes/1_master.pdf',

@@ -7,8 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pgde_app/app.dart';
 import 'package:pgde_app/core/network/api_exception.dart';
 import 'package:pgde_app/core/storage/key_value_store.dart';
+import 'package:pgde_app/features/auth/data/auth_api.dart';
+import 'package:pgde_app/features/auth/data/auth_mock_api.dart';
 import 'package:pgde_app/features/demande/data/demande_api.dart';
 import 'package:pgde_app/features/demande/domain/demande.dart';
+import 'package:pgde_app/features/reference/data/reference_api.dart';
+import 'package:pgde_app/features/reference/data/reference_mock_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Faux dossier pilotable, pour éprouver le wizard sans dépendre de l'état
@@ -121,6 +125,8 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        authApiProvider.overrideWithValue(MockAuthApi()),
+        referenceApiProvider.overrideWithValue(MockReferenceApi()),
         demandeApiProvider.overrideWithValue(api),
       ],
       child: const PgdeApp(),
@@ -157,21 +163,24 @@ void main() {
     // `find.text` ne le verrait pas.
     expect(find.textContaining('Date de naissance'), findsWidgets);
 
-    await tester.tap(find.text('Continuer'));
+    await tester.tap(find.text('Suivant'));
     await tester.pumpAndSettle();
     expect(find.text('Formations et documents'), findsOneWidget);
 
-    await tester.tap(find.text('Continuer'));
+    await tester.tap(find.text('Suivant'));
     await tester.pumpAndSettle();
     expect(find.text('Expériences professionnelles'), findsOneWidget);
-    expect(find.text('Avez-vous déjà travaillé ?'), findsOneWidget);
+    expect(
+      find.text('Avez-vous déjà une expérience professionnelle ?'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Continuer'));
+    await tester.tap(find.text('Suivant'));
     await tester.pumpAndSettle();
     expect(find.text('Vœux d\'emploi'), findsOneWidget);
     // Dernière étape : le bouton change de rôle.
     expect(find.text('Enregistrer'), findsOneWidget);
-    expect(find.text('Continuer'), findsNothing);
+    expect(find.text('Suivant'), findsNothing);
   });
 
   testWidgets('répondre « oui » au handicap ouvre le choix du type', (
@@ -201,7 +210,7 @@ void main() {
     final api = await _ouvrirLeWizard(tester);
 
     for (int i = 0; i < 3; i++) {
-      await tester.tap(find.text('Continuer'));
+      await tester.tap(find.text('Suivant'));
       await tester.pumpAndSettle();
     }
     await tester.tap(find.text('Enregistrer'));
@@ -227,7 +236,7 @@ void main() {
 
     // Le dossier chargé est complet : on peut enregistrer depuis l'étape 1.
     for (int i = 0; i < 3; i++) {
-      await tester.tap(find.text('Continuer'));
+      await tester.tap(find.text('Suivant'));
       await tester.pumpAndSettle();
     }
     await tester.tap(find.text('Enregistrer'));
@@ -239,13 +248,13 @@ void main() {
     expect(find.text('Le résumé est trop long.'), findsOneWidget);
   });
 
-  testWidgets('un dossier complet part en entier et ferme le wizard', (
+  testWidgets('un dossier complet part en entier et mène au récapitulatif', (
     tester,
   ) async {
     final api = await _ouvrirLeWizard(tester, dossier: _dossierValide);
 
     for (int i = 0; i < 3; i++) {
-      await tester.tap(find.text('Continuer'));
+      await tester.tap(find.text('Suivant'));
       await tester.pumpAndSettle();
     }
     await tester.tap(find.text('Enregistrer'));
@@ -255,7 +264,8 @@ void main() {
     expect(envoye, isNotNull);
     expect(envoye!.emploi1Id, 12);
     expect(envoye.emploi2Id, 45);
-    // Retour à l'accueil après l'enregistrement.
-    expect(find.text('Les étapes de votre dossier'), findsOneWidget);
+    // Comme sur le web : l'enregistrement mène au récapitulatif.
+    expect(find.text('Mon dossier'), findsOneWidget);
+    expect(find.text('Coordonnées'), findsOneWidget);
   });
 }

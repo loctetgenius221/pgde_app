@@ -3,35 +3,48 @@ import 'package:flutter/foundation.dart';
 /// Qui parle.
 enum Locuteur { candidat, ndimbal }
 
+/// Bouton proposé par le chatbot (§7.1) : on affiche [titre], on renvoie [payload].
+@immutable
+class BoutonChat {
+  const BoutonChat({required this.titre, required this.payload});
+
+  final String titre;
+  final String payload;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BoutonChat && other.titre == titre && other.payload == payload;
+
+  @override
+  int get hashCode => Object.hash(titre, payload);
+}
+
 /// Un tour de parole.
-///
-/// Classe immuable simple plutôt que `freezed` : ce modèle ne quitte jamais
-/// la mémoire — pas de sérialisation, pas de brouillon, pas d'union. La
-/// génération de code coûterait ici plus qu'elle ne rapporte.
 @immutable
 class Message {
   const Message({
     required this.locuteur,
     required this.texte,
-    this.enCoursDeFrappe = false,
+    this.boutons = const <BoutonChat>[],
+    this.imageUrl,
   });
 
   final Locuteur locuteur;
   final String texte;
-
-  /// Vrai tant que la réponse s'écrit encore.
-  ///
-  /// Le texte est alors partiel : c'est ce qui permet d'afficher la réponse
-  /// au fil de l'eau plutôt que de laisser le candidat devant un écran vide
-  /// pendant que le serveur rédige.
-  final bool enCoursDeFrappe;
+  final List<BoutonChat> boutons;
+  final String? imageUrl;
 
   bool get vientDeNdimbal => locuteur == Locuteur.ndimbal;
 
-  Message copyWith({String? texte, bool? enCoursDeFrappe}) => Message(
+  Message copyWith({
+    String? texte,
+    List<BoutonChat>? boutons,
+    String? imageUrl,
+  }) => Message(
     locuteur: locuteur,
     texte: texte ?? this.texte,
-    enCoursDeFrappe: enCoursDeFrappe ?? this.enCoursDeFrappe,
+    boutons: boutons ?? this.boutons,
+    imageUrl: imageUrl ?? this.imageUrl,
   );
 
   @override
@@ -39,27 +52,26 @@ class Message {
       other is Message &&
       other.locuteur == locuteur &&
       other.texte == texte &&
-      other.enCoursDeFrappe == enCoursDeFrappe;
+      other.imageUrl == imageUrl &&
+      listEquals(other.boutons, boutons);
 
   @override
-  int get hashCode => Object.hash(locuteur, texte, enCoursDeFrappe);
+  int get hashCode =>
+      Object.hash(locuteur, texte, imageUrl, Object.hashAll(boutons));
 }
 
-/// Ce que fait l'assistant à l'instant.
-///
-/// Trois états **logiques**, qui pilotent l'écran. Le personnage, lui, n'a
-/// que deux poses : il n'a pas à porter une nuance que l'indicateur de frappe
-/// exprime déjà mieux que lui.
+/// Réponse d'un appel `POST /chatbot/messages`.
+@immutable
+class TourChatbot {
+  const TourChatbot({required this.sessionId, required this.messages});
+
+  final String sessionId;
+  final List<Message> messages;
+}
+
 enum EtatAssistant {
-  /// Disponible.
   repos,
+  reflexion;
 
-  /// La question est partie, la réponse se prépare.
-  reflexion,
-
-  /// La réponse s'écrit.
-  parle;
-
-  /// Vrai quand une requête est en vol : c'est ce qui verrouille l'envoi.
   bool get occupe => this != EtatAssistant.repos;
 }

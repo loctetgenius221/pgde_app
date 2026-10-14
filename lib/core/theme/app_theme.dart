@@ -17,7 +17,11 @@ abstract final class AppTheme {
   static ThemeData _construire(Brightness brightness) {
     final bool clair = brightness == Brightness.light;
     final ColorScheme scheme = _scheme(brightness);
-    final TextTheme texte = _typographie(scheme);
+    // Police appliquée **ici**, et pas seulement via `ThemeData.fontFamily` :
+    // ce dernier ne touche que `textTheme`. Les styles repris tels quels
+    // ailleurs — titre de l'AppBar, libellés des boutons — restaient sinon
+    // en Roboto, la police par défaut d'Android.
+    final TextTheme texte = _typographie(scheme).apply(fontFamily: _police);
 
     /// Fond de tout ce qui surgit par-dessus la page — feuilles, menus,
     /// dialogues. Identique à la surface des cartes, pour qu'un élément
@@ -45,28 +49,32 @@ abstract final class AppTheme {
         titleTextStyle: texte.titleLarge,
       ),
 
-      // Champs **en pilule**, comme les boutons : une seule famille de formes
-      // pour toute l'application. Le contraste vient du fond, pas d'un trait ;
-      // le contour ne s'affirme qu'au focus.
-      //
-      // Un champ multiligne (résumé de CV) devra surcharger `border` avec un
-      // rayon plus faible : une pilule de six lignes de haut serait absurde.
+      // Champs aux formes de la plateforme web — rectangle arrondi à
+      // `Rayon.champ`, trait fin — pour qu'un candidat passant du site à
+      // l'application retrouve les mêmes repères. Fond blanc comme les cartes
+      // de « Mon dossier » ; seul un champ inactif reste grisé. Le contour ne
+      // s'affirme qu'au focus.
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: clair ? AppColors.surfaceClaire : AppColors.surfaceSombre,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: Espace.lg,
-          vertical: Espace.md + 2,
+        fillColor: WidgetStateColor.resolveWith(
+          (etats) => etats.contains(WidgetState.disabled) && clair
+              ? AppColors.champDesactiveClair
+              : (clair ? AppColors.champClair : AppColors.champSombre),
         ),
-        // Laisse respirer les icônes de début et de fin de champ : collées au
-        // bord, elles entreraient dans la courbe de la pilule.
+        // Hauteur de champ ramenée à 48 dp, la cible tactile de référence
+        // (Material, WCAG) : au-delà, un formulaire de trente champs défile
+        // sans fin sur un téléphone.
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: Espace.md,
+          vertical: Espace.sm + 2,
+        ),
         prefixIconConstraints: const BoxConstraints(
-          minWidth: 52,
-          minHeight: 52,
+          minWidth: 44,
+          minHeight: 48,
         ),
         suffixIconConstraints: const BoxConstraints(
-          minWidth: 52,
-          minHeight: 52,
+          minWidth: 44,
+          minHeight: 48,
         ),
         hintStyle: texte.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         labelStyle: texte.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
@@ -87,16 +95,16 @@ abstract final class AppTheme {
 
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
-          shape: const StadiumBorder(),
+          minimumSize: const Size.fromHeight(52),
+          shape: _formeBouton,
           textStyle: texte.labelLarge,
           elevation: 0,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
-          shape: const StadiumBorder(),
+          minimumSize: const Size.fromHeight(52),
+          shape: _formeBouton,
           side: BorderSide(color: scheme.outlineVariant),
           textStyle: texte.labelLarge,
         ),
@@ -114,7 +122,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Rayon.lg),
+          borderRadius: BorderRadius.circular(Rayon.md),
           side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
@@ -174,9 +182,7 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
       ),
 
-      timePickerTheme: TimePickerThemeData(
-        backgroundColor: surfaceFlottante,
-      ),
+      timePickerTheme: TimePickerThemeData(backgroundColor: surfaceFlottante),
 
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant,
@@ -202,9 +208,14 @@ abstract final class AppTheme {
     );
   }
 
+  /// Boutons au même rayon que les champs, comme sur le web.
+  static const RoundedRectangleBorder _formeBouton = RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(Rayon.champ)),
+  );
+
   static OutlineInputBorder _bordure(Color couleur, {double epaisseur = 1}) =>
       OutlineInputBorder(
-        borderRadius: BorderRadius.circular(Rayon.pilule),
+        borderRadius: BorderRadius.circular(Rayon.champ),
         borderSide: BorderSide(color: couleur, width: epaisseur),
       );
 

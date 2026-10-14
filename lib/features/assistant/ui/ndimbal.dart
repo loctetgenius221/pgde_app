@@ -951,14 +951,14 @@ class _PeintreNdimbal extends CustomPainter {
     if (salut <= 0) return 0;
     if (salut < 0.14) return -0.22 * (salut / 0.14);
     if (salut < 0.32) {
-      final double p = (salut - 0.14) / 0.18;
+      final double p = ((salut - 0.14) / 0.18).clamp(0.0, 1.0);
       return Curves.easeOutBack.transform(p) * 1.05 - 0.22 * (1 - p);
     }
     if (salut < 0.84) {
       final double p = (salut - 0.32) / 0.52;
       return 1.05 + 0.26 * math.sin(p * math.pi * 6);
     }
-    final double p = (salut - 0.84) / 0.16;
+    final double p = ((salut - 0.84) / 0.16).clamp(0.0, 1.0);
     return 1.05 * (1 - Curves.easeInCubic.transform(p));
   }
 

@@ -94,7 +94,7 @@ void main() {
       // Trois segments pour quatre étapes : le rail relie, il ne dépasse pas.
       expect(
         find.byWidgetPredicate(
-          (w) => w is Positioned && w.top == 34 && w.bottom == 0,
+          (w) => w is Positioned && w.top == coteTuileEtape && w.bottom == 0,
         ),
         findsNWidgets(3),
       );

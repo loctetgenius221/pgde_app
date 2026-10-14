@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Accès réseau : indispensable à l'API. Flutter ne le déclare que dans
+         les manifestes debug et profile ; sans cette ligne, la version
+         release n'atteint jamais le serveur (« Impossible de joindre le
+         serveur »). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="Demandes d'emploi"
         android:name="${applicationName}"
@@ -40,6 +46,13 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Ouverture des pièces jointes dans le navigateur (url_launcher) :
+             depuis Android 11, l'app doit déclarer les applications qu'elle
+             cherche à ouvrir. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

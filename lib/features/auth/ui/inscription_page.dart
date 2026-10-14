@@ -1,17 +1,16 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/ui/form_submission.dart';
 import '../../../core/ui/icone.dart';
 import '../../../core/ui/responsive.dart';
 import '../application/auth_controller.dart';
-import '../data/auth_api.dart';
 
-/// Création de compte — règles exactes de `AuthController::register` (§3.2).
+/// Création de compte — règles de `POST /auth/register` (§3.1).
 ///
 /// Le compte naît désactivé : aucun jeton n'est émis, l'utilisateur est
 /// renvoyé vers la connexion, puis vers l'écran de vérification.
@@ -38,51 +37,8 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
   final _password = TextEditingController();
   final _passwordConfirmation = TextEditingController();
 
-  /// §7.4 — disponibilité d'un identifiant, interrogée pendant la saisie.
-  ///
-  /// Trois champs du formulaire portent une contrainte d'unicité en base
-  /// (`username`, `email`, `numberid`). Les découvrir au moment du 422, après
-  /// huit champs remplis, est la meilleure façon de perdre un candidat.
-  final Map<String, bool> _disponible = <String, bool>{};
-  final Map<String, Timer> _verifications = <String, Timer>{};
-
-  void _verifierDisponibilite(String champ, String valeur) {
-    _verifications.remove(champ)?.cancel();
-    final String propre = valeur.trim();
-    if (propre.length < 3) {
-      if (_disponible.remove(champ) != null) setState(() {});
-      return;
-    }
-    // On laisse retomber la frappe : une requête par caractère saturerait le
-    // point d'entrée, que le cadrage demande justement de throttler.
-    _verifications[champ] = Timer(const Duration(milliseconds: 550), () async {
-      try {
-        final bool libre = await ref
-            .read(authApiProvider)
-            .estDisponible(
-              username: champ == 'username' ? propre : null,
-              email: champ == 'email' ? propre : null,
-              numberid: champ == 'numberid' ? propre : null,
-            );
-        if (mounted) setState(() => _disponible[champ] = libre);
-      } on Object catch (_) {
-        // Hors ligne : on ne dit rien. Le serveur tranchera à l'envoi.
-        if (mounted) setState(() => _disponible.remove(champ));
-      }
-    });
-  }
-
-  String? _indisponible(String champ) =>
-      _disponible[champ] == false ? 'Déjà utilisé.' : null;
-
-  String? _aideDisponibilite(String champ, [String? sinon]) =>
-      _disponible[champ] == true ? 'Disponible' : sinon;
-
   @override
   void dispose() {
-    for (final Timer t in _verifications.values) {
-      t.cancel();
-    }
     for (final c in <TextEditingController>[
       _prenom,
       _nom,
@@ -101,6 +57,7 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
   Future<void> _inscrire() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final String emailSaisi = _email.text.trim();
     final succes = await soumettre(
       () => ref
           .read(authControllerProvider.notifier)
@@ -109,23 +66,48 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
             lastname: _nom.text.trim(),
             username: _username.text.trim(),
             numberid: _numberid.text.trim(),
-            email: _email.text.trim(),
+            email: emailSaisi,
             password: _password.text,
           ),
     );
     if (!succes || !mounted) return;
 
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        duration: Duration(seconds: 6),
-        content: Text('Compte créé. Activez-le avec le code reçu par email.'),
-      ),
+    context.go(
+      '${Routes.verificationEmail}?email=${Uri.encodeComponent(emailSaisi)}',
     );
   }
 
   String? _obligatoire(String? v, String libelle) =>
       (v == null || v.trim().isEmpty) ? 'Saisissez votre $libelle' : null;
+
+  String? _validerNom(String? valeur, String libelle) {
+    final String? erreur = _obligatoire(valeur, libelle);
+    if (erreur != null) return erreur;
+    if (valeur!.trim().length > 255) return '255 caractères maximum';
+    return null;
+  }
+
+  String? _validerIdentifiant(String? valeur) {
+    final String? erreur = _obligatoire(valeur, "nom d'utilisateur");
+    if (erreur != null) return erreur;
+    final String identifiant = valeur!.trim();
+    if (identifiant.length < 3 || identifiant.length > 50) {
+      return 'De 3 à 50 caractères';
+    }
+    if (!RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(identifiant)) {
+      return 'Utilisez uniquement des lettres, chiffres, points, tirets ou tirets bas';
+    }
+    return null;
+  }
+
+  String? _validerNumeroPiece(String? valeur) {
+    final String? erreur = _obligatoire(valeur, 'numéro de CNI ou passeport');
+    if (erreur != null) return erreur;
+    if (!RegExp(r'^[A-Za-z0-9]+$').hasMatch(valeur!.trim())) {
+      return 'Utilisez uniquement des lettres et des chiffres';
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,43 +134,40 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     controller: _prenom,
                     textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.next,
+                    maxLength: 255,
                     decoration: InputDecoration(
                       labelText: 'Prénom',
                       prefixIcon: const PrefixeChamp(Icones.prenom),
                       errorText: erreurDuChamp('firstname'),
                     ),
-                    validator: (v) => _obligatoire(v, 'prénom'),
+                    validator: (v) => _validerNom(v, 'prénom'),
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(
                     controller: _nom,
                     textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.next,
+                    maxLength: 255,
                     decoration: InputDecoration(
                       labelText: 'Nom',
                       prefixIcon: const PrefixeChamp(Icones.nom),
                       errorText: erreurDuChamp('lastname'),
                     ),
-                    validator: (v) => _obligatoire(v, 'nom'),
+                    validator: (v) => _validerNom(v, 'nom'),
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(
                     controller: _numberid,
-                    keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.next,
                     inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
+                      FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
                     ],
-                    onChanged: (v) => _verifierDisponibilite('numberid', v),
                     decoration: InputDecoration(
                       labelText: 'Numéro de CNI ou de passeport',
                       prefixIcon: const PrefixeChamp(Icones.piece),
-                      helperText: _aideDisponibilite('numberid'),
-                      errorText:
-                          erreurDuChamp('numberid') ??
-                          _indisponible('numberid'),
+                      errorText: erreurDuChamp('numberid'),
                     ),
-                    validator: (v) => _obligatoire(v, 'numéro de CNI'),
+                    validator: _validerNumeroPiece,
                   ),
 
                   const _Section('Vos identifiants'),
@@ -196,19 +175,13 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     controller: _username,
                     autocorrect: false,
                     textInputAction: TextInputAction.next,
-                    onChanged: (v) => _verifierDisponibilite('username', v),
                     decoration: InputDecoration(
                       labelText: "Nom d'utilisateur",
-                      helperText: _aideDisponibilite(
-                        'username',
-                        'Sert à vous connecter',
-                      ),
+                      helperText: 'Sert à vous connecter',
                       prefixIcon: const PrefixeChamp(Icones.identifiant),
-                      errorText:
-                          erreurDuChamp('username') ??
-                          _indisponible('username'),
+                      errorText: erreurDuChamp('username'),
                     ),
-                    validator: (v) => _obligatoire(v, "nom d'utilisateur"),
+                    validator: _validerIdentifiant,
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(
@@ -216,19 +189,21 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
                     textInputAction: TextInputAction.next,
-                    onChanged: (v) => _verifierDisponibilite('email', v),
                     decoration: InputDecoration(
                       labelText: 'Adresse email',
                       prefixIcon: const PrefixeChamp(Icones.email),
-                      helperText: _aideDisponibilite('email'),
-                      errorText:
-                          erreurDuChamp('email') ?? _indisponible('email'),
+                      errorText: erreurDuChamp('email'),
                     ),
                     validator: (v) {
                       final valeur = v?.trim() ?? '';
                       if (valeur.isEmpty) return 'Saisissez votre email';
-                      if (!valeur.contains('@') || !valeur.contains('.')) {
+                      if (!RegExp(
+                        r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                      ).hasMatch(valeur)) {
                         return 'Adresse email invalide';
+                      }
+                      if (valeur.length > 255) {
+                        return '255 caractères maximum';
                       }
                       return null;
                     },

@@ -51,10 +51,9 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     await _ouvrir(session);
   }
 
-  /// L'inscription authentifie déjà (§3.1) : le serveur émet un jeton avec le
-  /// compte, encore désactivé. On ouvre donc la session tout de suite — le
-  /// routeur se charge de retenir l'utilisateur sur l'écran de vérification.
-  Future<void> inscription({
+  /// L'inscription crée le compte sans émettre de jeton (§3.1) : le candidat
+  /// doit activer son compte via l'e-mail reçu avant de se connecter.
+  Future<Utilisateur> inscription({
     required String firstname,
     required String lastname,
     required String username,
@@ -62,7 +61,7 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     required String email,
     required String password,
   }) async {
-    final session = await ref
+    return ref
         .read(authApiProvider)
         .register(
           firstname: firstname,
@@ -72,7 +71,6 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
           email: email,
           password: password,
         );
-    await _ouvrir(session);
   }
 
   Future<void> _ouvrir(Session session) async {
@@ -91,23 +89,23 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     state = const AsyncData(null);
   }
 
-  Future<void> renvoyerEmailDeVerification() =>
-      ref.read(authApiProvider).resendVerificationEmail();
-
-  /// Active le compte avec le code reçu par email (§3.4, option OTP).
-  Future<void> verifierAvecCode(String code) async {
-    state = AsyncData(await ref.read(authApiProvider).verifierAvecCode(code));
+  /// §3.2 — Renvoie le lien d'activation du compte par e-mail.
+  Future<void> renvoyerEmailDeVerification({String? email}) {
+    final String? adresse = email ?? state.value?.email;
+    if (adresse == null || adresse.trim().isEmpty) {
+      throw const ApiException('Une adresse email est requise.');
+    }
+    return ref
+        .read(authApiProvider)
+        .resendVerificationEmail(email: adresse.trim());
   }
 
-  /// Les trois opérations de mot de passe ne changent **pas** l'état de
-  /// session : elles réussissent ou lèvent, et c'est le formulaire appelant
-  /// qui l'affiche.
-  Future<void> changerMotDePasse({
-    required String actuel,
-    required String nouveau,
-  }) => ref
-      .read(authApiProvider)
-      .changerMotDePasse(actuel: actuel, nouveau: nouveau);
+  /// Active le compte avec le code reçu par email (§3.4, option OTP factice).
+  Future<void> verifierAvecCode(String code, {String? email}) async {
+    state = AsyncData(
+      await ref.read(authApiProvider).verifierAvecCode(code, email: email),
+    );
+  }
 
   /// §3.5 — l'email seul : le serveur envoie le lien de réinitialisation.
   /// La suite se passe hors de l'app, la v1 n'exposant pas de route pour
@@ -122,7 +120,11 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
 }
 
 final authControllerProvider =
-    AsyncNotifierProvider<AuthController, Utilisateur?>(AuthController.new);
+    AsyncNotifierProvider<AuthController, Utilisateur?>(
+      AuthController.new,
+      // The splash screen exposes a manual retry for session restoration.
+      retry: (_, _) => null,
+    );
 
 /// Raccourcis de lecture pour le routeur, sans exposer `AsyncValue` partout.
 final utilisateurConnecteProvider = Provider<Utilisateur?>(

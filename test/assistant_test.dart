@@ -134,38 +134,47 @@ void main() {
     });
 
     test('les accents ne changent pas la réponse', () async {
-      Future<String> demander(String q) async => (await MockAssistantApi()
-              .repondre(question: q, historique: const <Message>[])
-              .toList())
-          .join()
-          .trim();
+      Future<String> demander(String q) async =>
+          (await MockAssistantApi()
+                  .repondre(question: q, historique: const <Message>[])
+                  .toList())
+              .join()
+              .trim();
 
       // « delai » sans accent doit tomber sur la même réponse que « délai ».
       expect(await demander('quel délai ?'), await demander('quel delai ?'));
     });
 
-    test('hors sujet, il dit ce qu’il sait faire plutôt que d’inventer', () async {
-      final String reponse = (await MockAssistantApi()
-              .repondre(
-                question: 'quelle est la capitale du Brésil',
-                historique: const <Message>[],
-              )
-              .toList())
-          .join();
+    test(
+      'hors sujet, il dit ce qu’il sait faire plutôt que d’inventer',
+      () async {
+        final String reponse =
+            (await MockAssistantApi()
+                    .repondre(
+                      question: 'quelle est la capitale du Brésil',
+                      historique: const <Message>[],
+                    )
+                    .toList())
+                .join();
 
-      expect(reponse, contains('pièces'));
-      expect(reponse, isNot(contains('Brasilia')));
-    });
+        expect(reponse, contains('pièces'));
+        expect(reponse, isNot(contains('Brasilia')));
+      },
+    );
 
     test('les mots-clés du dossier tombent sur la bonne réponse', () async {
-      Future<String> demander(String q) async => (await MockAssistantApi()
-              .repondre(question: q, historique: const <Message>[])
-              .toList())
-          .join();
+      Future<String> demander(String q) async =>
+          (await MockAssistantApi()
+                  .repondre(question: q, historique: const <Message>[])
+                  .toList())
+              .join();
 
       expect(await demander('quelles pièces fournir ?'), contains('4 Mo'));
       expect(await demander('mes voeux'), contains('deux métiers'));
-      expect(await demander('je suis en situation de handicap'), contains('étape 1'));
+      expect(
+        await demander('je suis en situation de handicap'),
+        contains('étape 1'),
+      );
     });
   });
 }

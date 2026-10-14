@@ -114,31 +114,50 @@ void main() {
       );
       final Json formation = (corps['formations']! as List).single as Json;
 
-      // §5.3 — sans ce rappel, le fichier serait perdu à la prochaine
-      // modification de la formation.
-      expect(formation['existing_diplome_file'], 'uploads/diplomes/1_licence.pdf');
+      // §5.3 — le chemin privé repart dans `diplome_file` : sans ce rappel,
+      // le fichier serait perdu à la prochaine modification. Le contrat
+      // proscrit `existing_diplome_file`.
+      expect(formation['diplome_file'], 'uploads/diplomes/1_licence.pdf');
+      expect(formation.containsKey('existing_diplome_file'), isFalse);
     });
 
     test('une formation sans justificatif n’envoie pas la clé', () {
       final Json corps = DemandeMapper.formations(_dossier);
       final Json formation = (corps['formations']! as List).single as Json;
-      expect(formation.containsKey('existing_diplome_file'), isFalse);
+      expect(formation.containsKey('diplome_file'), isFalse);
     });
 
-    test('hasExperience vaut « oui » ou « non », jamais un booléen', () {
-      expect(DemandeMapper.experiences(_dossier)['hasExperience'], 'oui');
+    test('has_experience est un booléen, jamais « oui » ou « non »', () {
+      // §5.4 : le serveur refuse les chaînes `"oui"` / `"non"`.
+      expect(DemandeMapper.experiences(_dossier)['has_experience'], isTrue);
       expect(
         DemandeMapper.experiences(
           _dossier.copyWith(aDeLExperience: false),
-        )['hasExperience'],
-        'non',
+        )['has_experience'],
+        isFalse,
       );
       // Sans réponse, on n'invente pas un « oui ».
       expect(
         DemandeMapper.experiences(
           _dossier.copyWith(aDeLExperience: null),
-        )['hasExperience'],
-        'non',
+        )['has_experience'],
+        isFalse,
+      );
+    });
+
+    test('un téléphone secondaire vide part à null', () {
+      // §5.2 : `null`, pas une chaîne vide.
+      expect(
+        DemandeMapper.identite(
+          _dossier.copyWith(telephone2: '  '),
+        )['telephone2'],
+        isNull,
+      );
+      expect(
+        DemandeMapper.identite(
+          _dossier.copyWith(telephone2: '77 000 00 00'),
+        )['telephone2'],
+        '77 000 00 00',
       );
     });
 
@@ -243,6 +262,21 @@ void main() {
       final Demande porteur = DemandeMapper.depuisApi(avec);
       expect(porteur.aUnHandicap, isTrue);
       expect(porteur.handicapId, 4);
+    });
+
+    test('l’avatar par défaut du serveur n’est pas une photo', () {
+      // Sans photo, le serveur renvoie l'avatar générique du site : l'app
+      // proposait alors « Changer la photo » à qui n'en avait jamais déposé.
+      final Json sans = Json.from(reponse);
+      sans['identity'] = <String, dynamic>{
+        ...reponse['identity']! as Json,
+        'photo_profil_url':
+            'https://emploi.fonctionpublique.sn/images/images.png',
+      };
+      expect(DemandeMapper.depuisApi(sans).photo, isNull);
+
+      // Une vraie photo reste lue.
+      expect(DemandeMapper.depuisApi(reponse).photo, isNotNull);
     });
 
     test('chaque formation revient avec son justificatif', () {

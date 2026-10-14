@@ -12,11 +12,13 @@ class ApiException implements Exception {
   const ApiException(
     this.message, {
     this.statusCode,
+    this.code,
     this.fieldErrors = const {},
   });
 
   final String message;
   final int? statusCode;
+  final String? code;
   final FieldErrors fieldErrors;
 
   bool get isUnauthorized => statusCode == 401;
@@ -25,6 +27,11 @@ class ApiException implements Exception {
   bool get isConflict => statusCode == 409;
   bool get isValidation => statusCode == 422;
 
+  bool get isEmailNotVerified => code == 'email_not_verified';
+  bool get isAccessBlocked => code == 'access_blocked';
+  bool get isChatbotUnavailable =>
+      statusCode == 503 || code == 'chatbot_unavailable';
+
   /// Premier message d'erreur pour un champ, à afficher sous le champ concerné.
   String? errorFor(String field) {
     final messages = fieldErrors[field];
@@ -32,7 +39,7 @@ class ApiException implements Exception {
   }
 
   @override
-  String toString() => 'ApiException($statusCode): $message';
+  String toString() => 'ApiException($statusCode, code: $code): $message';
 
   /// Traduit un échec Dio en message affichable, en français.
   factory ApiException.fromDio(DioException e) {
@@ -70,6 +77,7 @@ class ApiException implements Exception {
     return ApiException(
       json['message'] as String? ?? _defaultMessage(status),
       statusCode: status,
+      code: json['code'] as String?,
       fieldErrors: _parseFieldErrors(json['errors']),
     );
   }
@@ -97,6 +105,7 @@ class ApiException implements Exception {
     413 => 'Fichier trop volumineux.',
     422 => 'Certaines informations sont invalides.',
     429 => 'Trop de tentatives. Réessayez dans quelques instants.',
+    503 => 'Le service est temporairement indisponible. Réessayez plus tard.',
     _ => 'Une erreur est survenue. Merci de réessayer.',
   };
 }

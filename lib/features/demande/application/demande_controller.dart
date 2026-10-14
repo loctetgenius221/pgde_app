@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/application/auth_controller.dart';
 import '../data/brouillon_store.dart';
 import '../data/demande_api.dart';
 import '../data/selecteur_fichiers.dart';
@@ -25,8 +26,21 @@ class DemandeController extends AsyncNotifier<Demande> {
   Future<Demande> build() async {
     ref.onDispose(() => _sauvegarde?.cancel());
 
-    final Demande? serveur = await ref.watch(demandeApiProvider).mien();
+    // Surveiller le magasin, c'est surveiller le compte : il est recréé à
+    // chaque changement d'utilisateur, et le dossier repart alors de zéro.
+    // Sans cela, le candidat suivant sur le même téléphone héritait en
+    // mémoire du dossier du précédent.
     final Demande? brouillon = ref.watch(brouillonStoreProvider).lire();
+
+    // Sans fiche `userdata` (`has_profile: false` au login), il n'y a rien à
+    // lire : le serveur répond même 500 sur `GET /candidat/profile` dans ce
+    // cas. On part donc d'un dossier vierge sans l'appeler.
+    final bool aUnProfil = ref.watch(
+      utilisateurConnecteProvider.select((u) => u?.hasProfile ?? false),
+    );
+    if (!aUnProfil) return brouillon ?? const Demande();
+
+    final Demande? serveur = await ref.watch(demandeApiProvider).mien();
 
     // Le brouillon prime : il n'existe que **pendant** une édition, et il est
     // purgé dès qu'un enregistrement aboutit. S'il est là, c'est qu'il porte
@@ -45,22 +59,17 @@ class DemandeController extends AsyncNotifier<Demande> {
     state = AsyncData(suivant);
 
     _sauvegarde?.cancel();
-    _sauvegarde = Timer(
-      _delaiSauvegarde,
-      () => ref.read(brouillonStoreProvider).ecrire(suivant),
-    );
+    // Le magasin est capturé **maintenant** : la sauvegarde différée part
+    // dans le brouillon de l'auteur de la modification, même si un autre
+    // compte s'est connecté entre-temps.
+    final BrouillonStore brouillon = ref.read(brouillonStoreProvider);
+    _sauvegarde = Timer(_delaiSauvegarde, () => brouillon.ecrire(suivant));
   }
 
   /// Envoie le dossier au serveur, étape par étape, puis purge le brouillon.
   ///
-  /// Le contrat découpe l'écriture en quatre `PUT` (§5.2 à §5.5). On les
-  /// enchaîne dans l'ordre du formulaire : si l'un échoue, les précédents
-  /// sont déjà enregistrés et le candidat ne perd que ce qui n'est pas
-  /// passé. C'est l'inverse exact de l'ancien envoi global, où un seul champ
-  /// refusé renvoyait tout le dossier à l'expéditeur.
-  ///
-  /// Les erreurs remontent à l'appelant : c'est l'écran qui sait sur quelle
-  /// étape renvoyer l'utilisateur en cas de 422.
+  /// Un justificatif de diplôme doit être téléversé **avant** le PUT
+  /// formations : le serveur n'accepte que le `file_path` retourné (§5.3, §6.4).
   Future<void> enregistrer() async {
     final Demande? actuel = state.value;
     if (actuel == null) return;
@@ -68,61 +77,62 @@ class DemandeController extends AsyncNotifier<Demande> {
     _sauvegarde?.cancel();
     final DemandeApi api = ref.read(demandeApiProvider);
 
-    await api.enregistrerIdentite(actuel);
-    await api.enregistrerFormations(actuel);
-    await api.enregistrerExperiences(actuel);
-    await api.enregistrerVoeux(actuel);
+    final Demande aEnvoyer = await _rattacherLesPieces(actuel);
 
-    // Le formulaire est sauvé : on purge le brouillon avant de toucher aux
-    // pièces. Si un fichier est refusé ensuite, l'utilisateur ne doit pas
-    // croire que sa saisie est perdue.
+    await api.enregistrerIdentite(aEnvoyer);
+    await api.enregistrerFormations(aEnvoyer);
+    await api.enregistrerExperiences(aEnvoyer);
+    await api.enregistrerVoeux(aEnvoyer);
+
     await ref.read(brouillonStoreProvider).purger();
-    state = AsyncData(actuel.copyWith(deposee: true));
+    state = AsyncData(aEnvoyer.copyWith(deposee: true));
 
-    await _deposerLesPiecesEnAttente();
+    // Le premier enregistrement crée la fiche : `has_profile` passe à vrai
+    // côté serveur, et le profil devient lisible au prochain démarrage.
+    if (!(ref.read(utilisateurConnecteProvider)?.hasProfile ?? false)) {
+      try {
+        await ref.read(authControllerProvider.notifier).rafraichir();
+      } on Object {
+        // Sans incidence sur l'enregistrement qui vient d'aboutir.
+      }
+    }
 
-    // Le serveur fait foi une fois tout envoyé : les justificatifs y ont pris
-    // leur chemin définitif, que seul `GET /candidat/profile` connaît.
     final Demande? serveur = await api.mien();
     if (serveur != null) state = AsyncData(serveur);
   }
 
-  /// Dépose les pièces mises en file (§6).
-  ///
-  /// Elles ne peuvent partir qu'**après** l'enregistrement des formations :
-  /// `formation_index` désigne un rang que le serveur doit déjà connaître.
-  Future<void> _deposerLesPiecesEnAttente() async {
+  /// Téléverse photo et justificatifs, et recopie les `file_path` dans le dossier.
+  Future<Demande> _rattacherLesPieces(Demande actuel) async {
     final PiecesEnAttente file = ref.read(piecesEnAttenteProvider);
-    if (file.estVide) return;
+    if (file.estVide) return actuel;
 
     final DemandeApi api = ref.read(demandeApiProvider);
+    Demande suivant = actuel;
 
     final File? photo = file.photo;
     if (photo != null) {
-      final FichierJoint piece = await api.deposerPhoto(photo);
-      modifier((d) => d.copyWith(photo: piece));
+      suivant = suivant.copyWith(photo: await api.deposerPhoto(photo));
     }
 
-    // Dans l'ordre des formations, pour que les rangs envoyés correspondent
-    // à ceux que le serveur vient d'enregistrer.
     final List<int> rangs = file.justificatifs.keys.toList()..sort();
     for (final int rang in rangs) {
       final FichierJoint piece = await api.deposerDiplome(
-        fichier: file.justificatifs[rang]!,
-        formationIndex: rang,
+        file.justificatifs[rang]!,
       );
-      modifier((d) => d.avecJustificatif(rang, piece));
+      suivant = suivant.avecJustificatif(rang, piece);
     }
 
     ref.read(piecesEnAttenteProvider.notifier).vider();
+    state = AsyncData(suivant);
+    return suivant;
   }
 
   /// Retire le justificatif d'une formation.
   ///
   /// Le contrat §6 n'expose **aucune suppression de justificatif** : seul le
   /// CV peut être retiré côté serveur. On détache donc la pièce de la
-  /// formation et on laisse le prochain `PUT /candidat/formations` la
-  /// remplacer — l'absence d'`existing_diplome_file` vaut abandon.
+  /// formation et on laisse le prochain `PUT /candidat/formations` partir
+  /// sans `diplome_file` pour cette ligne.
   Future<void> retirerJustificatif(int rang) async {
     modifier((d) => d.avecJustificatif(rang, null));
   }
@@ -135,6 +145,16 @@ class DemandeController extends AsyncNotifier<Demande> {
     modifier((d) => d.copyWith(photo: piece));
   }
 
+  /// Efface de l'appareil tout ce que l'utilisateur connecté y a laissé :
+  /// brouillon, pièces choisies non envoyées et copies temporaires des
+  /// fichiers. Appelé à la déconnexion volontaire, pour que le téléphone
+  /// puisse passer à quelqu'un d'autre.
+  Future<void> effacerLesDonneesLocales() async {
+    _sauvegarde?.cancel();
+    await ref.read(brouillonStoreProvider).purger();
+    await ref.read(piecesEnAttenteProvider.notifier).effacer();
+  }
+
   /// Abandonne les modifications locales et repart de l'état serveur.
   Future<void> abandonnerLeBrouillon() async {
     _sauvegarde?.cancel();
@@ -144,7 +164,11 @@ class DemandeController extends AsyncNotifier<Demande> {
 }
 
 final demandeControllerProvider =
-    AsyncNotifierProvider<DemandeController, Demande>(DemandeController.new);
+    AsyncNotifierProvider<DemandeController, Demande>(
+      DemandeController.new,
+      // Network failures are shown with an explicit retry action in the UI.
+      retry: (_, _) => null,
+    );
 
 /// Vrai si une édition locale n'a pas encore été envoyée au serveur.
 final brouillonEnAttenteProvider = Provider<bool>(

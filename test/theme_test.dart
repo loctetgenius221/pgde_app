@@ -129,7 +129,6 @@ void main() {
   });
 }
 
-
 String _hex(Color c) =>
     ((c.r * 255).round() << 16 | (c.g * 255).round() << 8 | (c.b * 255).round())
         .toRadixString(16)
