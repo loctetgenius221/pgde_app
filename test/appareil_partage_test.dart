@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pgde_app/core/storage/coffre_local.dart';
 import 'package:pgde_app/core/storage/key_value_store.dart';
 import 'package:pgde_app/features/auth/application/auth_controller.dart';
 import 'package:pgde_app/features/auth/domain/utilisateur.dart';
@@ -46,6 +47,7 @@ Future<(ProviderContainer, SharedPreferences)> _telephone([
   final ProviderContainer conteneur = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
+      coffreLocalProvider.overrideWithValue(CoffreLocal.enMemoire()),
       utilisateurConnecteProvider.overrideWith(
         (ref) => ref.watch(_compteProvider),
       ),

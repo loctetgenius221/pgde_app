@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/storage/coffre_local.dart';
 import '../../../core/storage/key_value_store.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/message.dart';
@@ -33,7 +34,8 @@ class HistoriqueStore {
 
   static const Duration dureeDeVie = Duration(minutes: 60);
 
-  final KeyValueStore _store;
+  /// Chiffré (audit SEC-002).
+  final StockageChiffre _store;
   final int? _utilisateurId;
   final DateTime Function() _maintenant;
 
@@ -84,7 +86,10 @@ class HistoriqueStore {
 /// compte.
 final historiqueStoreProvider = Provider<HistoriqueStore>(
   (ref) => HistoriqueStore(
-    ref.watch(keyValueStoreProvider),
+    StockageChiffre(
+      ref.watch(keyValueStoreProvider),
+      ref.watch(coffreLocalProvider),
+    ),
     ref.watch(utilisateurConnecteProvider.select((u) => u?.id)),
   ),
 );

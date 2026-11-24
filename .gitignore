@@ -54,3 +54,6 @@ key.properties
 
 # Sorties brutes des outils d'audit : volumineuses, régénérables
 audit/raw/
+
+# Fiche de suivi personnelle (classeur DSI) : reste sur le poste
+PROJECT.md

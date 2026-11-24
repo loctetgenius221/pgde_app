@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/storage/coffre_local.dart';
 import '../../../core/storage/key_value_store.dart';
 import '../../auth/application/auth_controller.dart';
 import '../domain/demande.dart';
@@ -27,7 +28,8 @@ class BrouillonStore {
   /// appartient ce qu'elle contient : elle est effacée, jamais relue.
   static const String cleAncienne = 'brouillon_demande';
 
-  final KeyValueStore _store;
+  /// Chiffré (audit SEC-002) : le dossier porte des données de santé.
+  final StockageChiffre _store;
   final int? _utilisateurId;
 
   String? get _cle =>
@@ -69,7 +71,7 @@ final brouillonStoreProvider = Provider<BrouillonStore>((ref) {
   final KeyValueStore store = ref.watch(keyValueStoreProvider);
   unawaited(store.remove(BrouillonStore.cleAncienne));
   return BrouillonStore(
-    store,
+    StockageChiffre(store, ref.watch(coffreLocalProvider)),
     ref.watch(utilisateurConnecteProvider.select((u) => u?.id)),
   );
 });

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -296,6 +297,9 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
                                   : null,
                             ),
                             keyboardType: TextInputType.emailAddress,
+                            inputFormatters: <TextInputFormatter>[
+                              LengthLimitingTextInputFormatter(255),
+                            ],
                             validator: (v) {
                               final valeur = v?.trim() ?? '';
                               if (valeur.isEmpty) {
@@ -366,11 +370,13 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
                         ? const Icon(Icons.refresh, size: 20)
                         : const Icon(Icons.login, size: 20),
                     label: Text(
-                      (utilisateur != null && !utilisateur.enabled)
+                      secondesAvantNouvelEssai > 0
+                          ? 'Réessayez dans $secondesAvantNouvelEssai s'
+                          : (utilisateur != null && !utilisateur.enabled)
                           ? 'J’ai activé mon compte — Vérifier'
                           : 'J’ai activé mon compte — Se connecter',
                     ),
-                    onPressed: envoiEnCours ? null : _validerOuSeConnecter,
+                    onPressed: envoiPossible ? _validerOuSeConnecter : null,
                   ),
                   const SizedBox(height: Espace.sm),
 
@@ -395,7 +401,7 @@ class _VerificationEmailPageState extends ConsumerState<VerificationEmailPage>
                           ? 'Renvoyer le lien ($_cooldownSecondes s)'
                           : 'Renvoyer le lien d’activation',
                     ),
-                    onPressed: (envoiEnCours || _cooldownSecondes > 0)
+                    onPressed: (!envoiPossible || _cooldownSecondes > 0)
                         ? null
                         : _renvoyer,
                   ),

@@ -25,7 +25,7 @@ Future<void> _afficher(WidgetTester tester, Demande demande) async {
             lastname: 'Ndiaye Diallo',
             username: 'aminata',
             numberid: '1234567890123',
-            email:'aminata.ndiaye.diallo@gmail.com',
+            email: 'aminata.ndiaye.diallo@gmail.com',
             enabled: true,
           ),
         ),

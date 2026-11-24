@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -132,6 +133,10 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
                       autofillHints: const <String>[AutofillHints.username],
+                      // Un email fait au plus 255 caractères (colonne serveur).
+                      inputFormatters: <TextInputFormatter>[
+                        LengthLimitingTextInputFormatter(255),
+                      ],
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'Saisissez votre identifiant'
                           : null,
@@ -167,6 +172,11 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                         ),
                       ),
                       autofillHints: const <String>[AutofillHints.password],
+                      // Large à dessein : un mot de passe créé ailleurs (site
+                      // web) ne doit pas devenir impossible à saisir ici.
+                      inputFormatters: <TextInputFormatter>[
+                        LengthLimitingTextInputFormatter(128),
+                      ],
                       onFieldSubmitted: (_) => _connecter(),
                       validator: (v) => (v == null || v.isEmpty)
                           ? 'Saisissez votre mot de passe'
@@ -184,10 +194,8 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                     const SizedBox(height: Espace.xs),
 
                     FilledButton(
-                      onPressed: envoiEnCours ? null : _connecter,
-                      child: envoiEnCours
-                          ? const IndicateurBouton()
-                          : const Text('Se connecter'),
+                      onPressed: envoiPossible ? _connecter : null,
+                      child: contenuBouton('Se connecter'),
                     ),
                     const SizedBox(height: Espace.md),
 

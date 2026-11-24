@@ -501,9 +501,10 @@ void main() {
         expect(b.serveur.appels.last, (message: '/greet', sessionId: null));
         expect(b.etat.messages, <Message>[_salutation]);
         expect(b.etat.sessionId, 'session-2');
-        final Map<String, dynamic> stocke =
-            jsonDecode(b.prefs.getString('chatbot_conversation_1')!)
-                as Map<String, dynamic>;
+        final Map<String, dynamic> stocke = lireStocke(
+          b.prefs,
+          'chatbot_conversation_1',
+        )!;
         expect(stocke['messages'], hasLength(1));
       },
     );
@@ -568,9 +569,10 @@ void main() {
 
     test('les boutons sont conservés avec leur payload', () async {
       final _Banc b = await _auMenu();
-      final Map<String, dynamic> json =
-          jsonDecode(b.prefs.getString('chatbot_conversation_1')!)
-              as Map<String, dynamic>;
+      final Map<String, dynamic> json = lireStocke(
+        b.prefs,
+        'chatbot_conversation_1',
+      )!;
       final Message dernier = Message.fromJson(
         (json['messages'] as List).last as Map<String, dynamic>,
       );
