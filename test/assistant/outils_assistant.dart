@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:pgde_app/core/storage/coffre_local.dart';
 import 'package:pgde_app/core/storage/key_value_store.dart';
 import 'package:pgde_app/features/assistant/data/assistant_api.dart';
 import 'package:pgde_app/features/assistant/domain/message.dart';
@@ -95,9 +96,18 @@ Future<SharedPreferences> preferences([
   return SharedPreferences.getInstance();
 }
 
+/// Clé de chiffrement de l'appareil simulé. Partagée entre les « lancements »
+/// d'un même test, comme le Keystore survit à la fermeture de l'app.
+final CoffreLocal coffreDuTelephone = CoffreLocal.enMemoire();
+
+/// Contenu déchiffré d'une entrée du stockage local.
+Map<String, dynamic>? lireStocke(SharedPreferences prefs, String cle) =>
+    StockageChiffre(KeyValueStore(prefs), coffreDuTelephone).readJson(cle);
+
 /// Les surcharges communes : stockage, compte connecté, faux serveur.
 List<Override> surcharges(SharedPreferences prefs, FauxAmath serveur) => [
   sharedPreferencesProvider.overrideWithValue(prefs),
+  coffreLocalProvider.overrideWithValue(coffreDuTelephone),
   utilisateurConnecteProvider.overrideWith((ref) => ref.watch(compteProvider)),
   assistantApiProvider.overrideWithValue(serveur),
 ];

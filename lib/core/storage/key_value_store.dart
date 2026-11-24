@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persistance locale des données non sensibles : référentiel mis en cache et
-/// brouillon du wizard, stockés en blobs JSON.
+/// Persistance locale des données non sensibles (référentiel mis en cache,
+/// préférences), stockées en blobs JSON. Les données personnelles passent
+/// par [StockageChiffre] (`coffre_local.dart`).
 ///
 /// Voir ADR-002 : le référentiel (~700 lignes quasi statiques) est chargé
 /// intégralement en mémoire de toute façon. Une base embarquée n'apporterait
@@ -26,6 +27,11 @@ class KeyValueStore {
 
   Future<void> writeJson(String key, Map<String, dynamic> value) =>
       _prefs.setString(key, jsonEncode(value));
+
+  String? readString(String key) => _prefs.getString(key);
+
+  Future<void> writeString(String key, String value) =>
+      _prefs.setString(key, value);
 
   bool readBool(String key, {bool defaut = false}) =>
       _prefs.getBool(key) ?? defaut;

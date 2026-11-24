@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_dimens.dart';
@@ -84,6 +85,9 @@ class _MotDePasseOubliePageState extends ConsumerState<MotDePasseOubliePage>
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
+                      inputFormatters: <TextInputFormatter>[
+                        LengthLimitingTextInputFormatter(255),
+                      ],
                       decoration: InputDecoration(
                         labelText: 'Adresse email',
                         prefixIcon: const PrefixeChamp(Icones.email),
@@ -100,10 +104,8 @@ class _MotDePasseOubliePageState extends ConsumerState<MotDePasseOubliePage>
                     ),
                     const SizedBox(height: Espace.xl),
                     FilledButton(
-                      onPressed: envoiEnCours ? null : _demander,
-                      child: envoiEnCours
-                          ? const IndicateurBouton()
-                          : const Text('Envoyer le lien'),
+                      onPressed: envoiPossible ? _demander : null,
+                      child: contenuBouton('Envoyer le lien'),
                     ),
                   ] else
                     FilledButton(

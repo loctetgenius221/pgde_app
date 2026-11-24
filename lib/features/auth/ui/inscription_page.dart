@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -230,6 +232,9 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                   TextFormField(
                     controller: _password,
                     obscureText: true,
+                    inputFormatters: <TextInputFormatter>[
+                      LengthLimitingTextInputFormatter(72),
+                    ],
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'Mot de passe',
@@ -242,6 +247,12 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     validator: (v) {
                       final String valeur = v ?? '';
                       if (valeur.length < 8) return 'Au moins 8 caractères';
+                      // bcrypt (Laravel) ignore tout ce qui dépasse 72 octets :
+                      // au-delà, le candidat croirait son mot de passe plus
+                      // solide qu'il ne l'est. Les accents comptent double.
+                      if (utf8.encode(valeur).length > 72) {
+                        return '72 caractères maximum';
+                      }
                       if (!RegExp('[A-Z]').hasMatch(valeur)) {
                         return 'Au moins une lettre majuscule';
                       }
@@ -255,6 +266,9 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                   TextFormField(
                     controller: _passwordConfirmation,
                     obscureText: true,
+                    inputFormatters: <TextInputFormatter>[
+                      LengthLimitingTextInputFormatter(72),
+                    ],
                     decoration: const InputDecoration(
                       labelText: 'Confirmez le mot de passe',
                       prefixIcon: PrefixeChamp(Icones.motDePasseConfirmation),
@@ -266,10 +280,8 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                   const SizedBox(height: Espace.xl),
 
                   FilledButton(
-                    onPressed: envoiEnCours ? null : _inscrire,
-                    child: envoiEnCours
-                        ? const IndicateurBouton()
-                        : const Text('Créer mon compte'),
+                    onPressed: envoiPossible ? _inscrire : null,
+                    child: contenuBouton('Créer mon compte'),
                   ),
                 ],
               ),

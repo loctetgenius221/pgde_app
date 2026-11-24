@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/session/session_expiry.dart';
+import '../../../core/storage/coffre_local.dart';
 import '../../../core/storage/token_store.dart';
 import '../data/auth_api.dart';
 import '../domain/utilisateur.dart';
@@ -28,7 +29,12 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     expiry.addListener(surExpiration);
     ref.onDispose(() => expiry.removeListener(surExpiration));
 
+    // La clé des données locales se charge en même temps que le jeton :
+    // aucun compte n'est connecté avant que brouillon et historique ne
+    // sachent se déchiffrer. ouvrir ne lève jamais.
+    final Future<void> coffre = ref.watch(coffreLocalProvider).ouvrir();
     final token = await ref.watch(tokenStoreProvider).read();
+    await coffre;
     if (token == null) return null;
 
     try {
