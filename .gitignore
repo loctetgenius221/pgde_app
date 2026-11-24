@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Audit SEC-003 — clés de signature et secrets, jamais dans le dépôt
+android/key.properties
+key.properties
+*.jks
+*.keystore
+.env
+.env.*
+
+# Sorties brutes des outils d'audit : volumineuses, régénérables
+audit/raw/

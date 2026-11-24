@@ -42,8 +42,18 @@ flutter run \
 | Appareil physique (même Wi-Fi) | `http://<IP LAN>:8000/api/v1` |
 
 Côté serveur : `php artisan serve --host=0.0.0.0 --port=8000`.
-Le HTTP en clair est autorisé **en debug uniquement** — `android/app/src/debug/AndroidManifest.xml`
-et `NSAllowsLocalNetworking` dans `ios/Runner/Info.plist`.
+Le HTTP en clair est autorisé **en debug uniquement** sur Android —
+`android/app/src/debug/AndroidManifest.xml`.
+
+Sur iOS, `ios/Runner/Info.plist` n'a **aucune** exception ATS : ce fichier
+part tel quel dans la version publiée (audit SEC-004). Pour viser un backend
+local en HTTP depuis le simulateur, ajouter **localement et sans le
+commiter** :
+
+```xml
+<key>NSAppTransportSecurity</key>
+<dict><key>NSAllowsLocalNetworking</key><true/></dict>
+```
 
 ### Vérifications
 
@@ -274,7 +284,7 @@ recadré avec marges pour l'icône adaptative Android (zone sûre de 66 %).
 
 ## Contrat d'interface API v1
 
-L'app est alignée sur `CONTRAT_INTERFACE_API_MOBILE.md`. Basculer sur le vrai
+L'app est alignée sur `docs/CONTRAT_INTERFACE_API_MOBILE_v2.md` (la v1 du 5 octobre 2026 est archivée à côté). Basculer sur le vrai
 serveur ne demande qu'un drapeau :
 
 ```bash

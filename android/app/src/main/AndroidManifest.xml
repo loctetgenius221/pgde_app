@@ -8,10 +8,16 @@
          une dictée, à la demande du candidat. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
+    <!-- Audit SEC-002 : aucune sauvegarde des données de l'application.
+         `allowBackup` couvre Android 11 et moins, `dataExtractionRules`
+         Android 12 et plus (sauvegarde cloud et transfert d'appareil). -->
     <application
         android:label="Demandes d'emploi"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"
