@@ -82,7 +82,10 @@ void main() {
         final dio = Dio();
         dio.httpClientAdapter = _FakeDioAdapter((options) async {
           expect(options.path, '/auth/register');
-          expect(options.data['password_confirmation'], 'secret123');
+          expect(
+            (options.data as Map<String, dynamic>)['password_confirmation'],
+            'secret123',
+          );
 
           return ResponseBody.fromString(
             '{"success": true, "message": "Compte créé.", "data": {"user": {"id": 42, "firstname": "Awa", "lastname": "Diop", "username": "awa.diop", "numberid": "123456", "email": "awa@example.com", "enabled": false}, "email_verification_required": true}}',
@@ -115,10 +118,17 @@ void main() {
         final dio = Dio();
         dio.httpClientAdapter = _FakeDioAdapter((options) async {
           expect(options.path, '/auth/login');
-          expect(options.data['login'], 'awa@example.com');
-          expect(options.data['password'], 'secret123');
           expect(
-            (options.data['device_name'] as String).startsWith('pgde-app-'),
+            (options.data as Map<String, dynamic>)['login'],
+            'awa@example.com',
+          );
+          expect(
+            (options.data as Map<String, dynamic>)['password'],
+            'secret123',
+          );
+          expect(
+            ((options.data as Map<String, dynamic>)['device_name'] as String)
+                .startsWith('pgde-app-'),
             isTrue,
           );
 
@@ -145,7 +155,10 @@ void main() {
         final dio = Dio();
         dio.httpClientAdapter = _FakeDioAdapter((options) async {
           expect(options.path, '/auth/forgot-password');
-          expect(options.data['email'], 'awa@example.com');
+          expect(
+            (options.data as Map<String, dynamic>)['email'],
+            'awa@example.com',
+          );
 
           return ResponseBody.fromString(
             '{"success": true, "message": "Si cette adresse correspond à un compte, un lien lui a été envoyé."}',
@@ -169,7 +182,8 @@ void main() {
         final dio = Dio();
         dio.httpClientAdapter = _FakeDioAdapter((options) async {
           expect(options.path, '/auth/resend-verification');
-          bodyEnvoye = options.data['email'] as String?;
+          bodyEnvoye =
+              (options.data as Map<String, dynamic>)['email'] as String?;
 
           return ResponseBody.fromString(
             '{"success": true, "message": "Lien envoyé."}',

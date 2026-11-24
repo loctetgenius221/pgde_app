@@ -9,6 +9,7 @@ import 'package:pgde_app/core/network/api_exception.dart';
 import 'package:pgde_app/core/storage/key_value_store.dart';
 import 'package:pgde_app/features/auth/data/auth_api.dart';
 import 'package:pgde_app/features/auth/data/auth_mock_api.dart';
+import 'package:pgde_app/features/auth/domain/utilisateur.dart';
 import 'package:pgde_app/features/demande/data/demande_api.dart';
 import 'package:pgde_app/features/demande/domain/demande.dart';
 import 'package:pgde_app/features/reference/data/reference_api.dart';
@@ -66,20 +67,46 @@ class _FauxDemandeApi implements DemandeApi {
   }
 
   @override
-  Future<FichierJoint> deposerDiplome({
-    required File fichier,
-    required int formationIndex,
-  }) async {
-    diplomesDeposes.add(formationIndex);
+  Future<FichierJoint> deposerDiplome(File fichier) async {
+    diplomesDeposes.add(diplomesDeposes.length);
     return const FichierJoint(chemin: 'd.pdf', url: 'http://x/d.pdf');
   }
 
   @override
-  Future<FichierJoint> deposerCv(File fichier) async =>
-      const FichierJoint(chemin: 'cv.pdf', url: 'http://x/cv.pdf');
+  Future<void> supprimerCv(String filePath) async {}
 
   @override
-  Future<void> supprimerCv() async {}
+  Future<File> telecharger(FichierJoint piece) async => File(piece.chemin);
+}
+
+/// Compte de démonstration dont `has_profile` suit le scénario.
+///
+/// Le contrôleur du dossier ne lit `GET /candidat/profile` que si le compte
+/// a déjà un profil : sans cela, un dossier « déjà déposé » ne serait jamais
+/// chargé et l'accueil resterait sur « Commencer ma demande ».
+class _AuthDeDemo extends MockAuthApi {
+  _AuthDeDemo({required this.aUnProfil});
+
+  final bool aUnProfil;
+
+  @override
+  Future<Session> login({
+    required String identifiant,
+    required String password,
+  }) async {
+    final Session s = await super.login(
+      identifiant: identifiant,
+      password: password,
+    );
+    return (
+      token: s.token,
+      utilisateur: s.utilisateur.copyWith(hasProfile: aUnProfil),
+    );
+  }
+
+  @override
+  Future<Utilisateur> me() async =>
+      (await super.me()).copyWith(hasProfile: aUnProfil);
 }
 
 /// Dossier minimal accepté par le serveur (§4, récapitulatif).
@@ -125,7 +152,9 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        authApiProvider.overrideWithValue(MockAuthApi()),
+        authApiProvider.overrideWithValue(
+          _AuthDeDemo(aUnProfil: dossier != null),
+        ),
         referenceApiProvider.overrideWithValue(MockReferenceApi()),
         demandeApiProvider.overrideWithValue(api),
       ],
@@ -142,11 +171,17 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
 
   // Depuis l'accueil, on entre dans le formulaire. Un dossier déjà déposé
   // ouvre d'abord le résumé : c'est « Modifier » qui mène au wizard.
-  await tester.tap(
-    dossier == null
-        ? find.byType(FilledButton).first
-        : find.text('Modifier mon dossier'),
+  final Finder entree = dossier == null
+      ? find.byType(FilledButton).first
+      : find.text('Modifier mon dossier');
+  // L'accueil est une liste paresseuse : la carte du dossier peut se trouver
+  // sous la ligne de flottaison, et n'être alors pas encore construite.
+  await tester.scrollUntilVisible(
+    entree,
+    200,
+    scrollable: find.byType(Scrollable).first,
   );
+  await tester.tap(entree);
   await tester.pumpAndSettle();
 
   return api;
