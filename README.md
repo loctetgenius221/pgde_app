@@ -1,448 +1,116 @@
-# Demandes d'emploi — application mobile
+# PGDE — Demandes d'emploi (mobile)
 
-Application Flutter du portail de demandes d'emploi du Ministère de la Fonction publique.
-Le cadrage métier et le contrat d'API font l'objet d'un document séparé : [MOBILE_FLUTTER.md](MOBILE_FLUTTER.md).
-Les références `§x.y` de ce README et des commentaires du code y renvoient.
+Application Flutter (Android + iOS) du portail de demandes d'emploi du
+Ministère de la Fonction publique : compte candidat, dossier en 4 étapes,
+pièces jointes, assistant conversationnel.
 
----
+## Prérequis
+
+- Flutter 3.47+ (Dart 3.10+), Android Studio (SDK + émulateur)
+- Pour iOS : un Mac avec Xcode
 
 ## Démarrer
 
 ```bash
 flutter pub get
-dart run build_runner build        # modèles freezed / json_serializable
+dart run build_runner build      # génère les modèles freezed / json
 flutter run
 ```
 
-Par défaut l'app tourne sur un **faux backend en mémoire** : le vrai n'expose
-aucune API consommable aujourd'hui (§6.1, bloqueurs B1 et B2).
+| Mode | Commande | Backend |
+| :--- | :--- | :--- |
+| Production (défaut) | `flutter run` | `https://emploi.fonctionpublique.sn/api/v1` |
+| Démonstration hors ligne | `flutter run --dart-define=USE_MOCKS=true` | faux backend en mémoire |
+| Backend local | `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1` | Laravel sur le PC |
 
-Comptes de démonstration :
+**Backend local** : lancer `php artisan serve --host=0.0.0.0 --port=8000`, puis
+choisir l'adresse selon l'appareil : `10.0.2.2` (émulateur Android),
+`localhost` (simulateur iOS), IP du PC (téléphone sur le même Wi-Fi).
+Le HTTP en clair n'est autorisé qu'en **debug Android**. Sur le simulateur iOS,
+ajouter `NSAllowsLocalNetworking` dans `Info.plist` **en local, sans le commiter**.
 
-| Nom d'utilisateur | Mot de passe | État |
+**Comptes de démonstration** (mode démo uniquement) :
+
+| Identifiant | Mot de passe | Cas |
 | :--- | :--- | :--- |
 | `msagna` | `password` | compte actif |
-| `anouveau` | `password` | compte non vérifié — mène à l'écran d'activation |
+| `anouveau` | `password` | compte non activé, code d'activation `123456` |
 
-Sur l'écran d'activation, « Renvoyer l'email » active directement le compte :
-raccourci assumé, `MAIL_MAILER=log` en local n'envoie aucun mail (§3.4).
-
-### Brancher sur le backend réel
+## Vérifier avant de commiter
 
 ```bash
-flutter run \
-  --dart-define=USE_MOCKS=false \
-  --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
-```
-
-| Contexte | `API_BASE_URL` |
-| :--- | :--- |
-| Émulateur Android | `http://10.0.2.2:8000/api/v1` |
-| Simulateur iOS | `http://localhost:8000/api/v1` |
-| Appareil physique (même Wi-Fi) | `http://<IP LAN>:8000/api/v1` |
-
-Côté serveur : `php artisan serve --host=0.0.0.0 --port=8000`.
-Le HTTP en clair est autorisé **en debug uniquement** sur Android —
-`android/app/src/debug/AndroidManifest.xml`.
-
-Sur iOS, `ios/Runner/Info.plist` n'a **aucune** exception ATS : ce fichier
-part tel quel dans la version publiée (audit SEC-004). Pour viser un backend
-local en HTTP depuis le simulateur, ajouter **localement et sans le
-commiter** :
-
-```xml
-<key>NSAppTransportSecurity</key>
-<dict><key>NSAllowsLocalNetworking</key><true/></dict>
-```
-
-### Vérifications
-
-```bash
-flutter analyze      # doit rester à zéro
+flutter analyze        # doit afficher « No issues found! »
 flutter test
-dart run build_runner watch   # pendant le dev
 ```
 
----
+## Publier sur Android
 
-## Architecture
+1. Avoir `android/key.properties` (clé d'upload, **jamais commité**) :
+   ```properties
+   storeFile=C:/Users/<vous>/cles-android/pgde-upload.jks
+   storePassword=...
+   keyAlias=upload
+   keyPassword=...
+   ```
+   Sans ce fichier, la release est signée avec la clé de debug : le Play
+   Store la refuse.
+2. Construire et vérifier la signature :
+   ```bash
+   flutter build appbundle --release
+   keytool -printcert -jarfile build/app/outputs/bundle/release/app-release.aab
+   ```
+3. Envoyer `app-release.aab` sur la Play Console (Play App Signing).
 
-Découpage **par fonctionnalité**, trois couches par fonctionnalité, dépendances
-toujours orientées vers l'intérieur : `ui → application → data → domain`.
+La clé `.jks` et son mot de passe se sauvegardent **hors du PC** (gestionnaire
+de mots de passe + support hors ligne).
+
+## Structure
 
 ```
 lib/
-├── main.dart                 amorçage (prefs, locale fr, portrait)
-├── app.dart                  MaterialApp.router
-├── core/                     socle transverse, ne connaît aucune feature
-│   ├── config/env.dart       --dart-define : URL d'API, mocks
-│   ├── network/              Dio, intercepteur Bearer, ApiException
-│   ├── session/              signal d'expiration de session (401)
-│   ├── storage/              jeton chiffré + magasin clé/valeur JSON
-│   ├── router/               go_router + redirections selon la session
-│   ├── theme/                thème unique Material 3
-│   ├── json/                 convertisseurs partagés (date YYYY-MM-DD)
-│   └── ui/                   AsyncView, FormSubmission, BandeauErreur
+├── main.dart, app.dart
+├── core/          socle commun, ne dépend d'aucune feature
+│   ├── config/    URL d'API et mode démo (--dart-define)
+│   ├── network/   Dio, jeton Bearer, ApiException
+│   ├── storage/   jeton chiffré (Keystore/Keychain), préférences
+│   └── router/, theme/, ui/, session/, json/, dictee/
 └── features/
-    ├── auth/                 inscription, connexion, vérification d'email
-    ├── reference/            nomenclatures, cache d'abord
-    └── demande/              le dossier candidat (wizard 4 étapes)
+    ├── auth/        inscription, connexion, activation, mot de passe
+    ├── demande/     dossier candidat : wizard 4 étapes, pièces, résumé
+    ├── reference/   référentiels (régions, emplois…), en cache
+    ├── assistant/   chatbot Amath
+    └── onboarding/, splash/
 ```
 
-### Ce qu'on ne fait pas, et pourquoi
+Chaque feature suit `ui → application → data → domain`. Chaque API a une
+version HTTP et une version démo (`Http…Api` / `Mock…Api`), choisie par
+`USE_MOCKS`.
 
-Trois couches « canoniques » de la Clean Architecture ont été écartées. Ce sont
-des décisions, pas des oublis.
+## Règles du projet
 
-**Pas de couche `usecase`.** Le dépôt *est* la frontière métier. Une classe par
-appel de dépôt, ce serait une quarantaine de fichiers qui délèguent sans rien
-décider.
+- **Français partout** (code métier, libellés, commentaires), sauf les noms
+  imposés par le serveur (`username`, `numberid`…).
+- **`flutter analyze` à zéro** : règles strictes dans `analysis_options.yaml`.
+- **Aucun secret dans git** : `key.properties`, `*.jks`, `.env` sont ignorés.
+- **Le jeton** ne part que vers l'API, et un `401` renvoie à la connexion.
+- **Les modèles générés** (`*.freezed.dart`, `*.g.dart`) se régénèrent avec
+  `build_runner`, ils ne se modifient pas à la main.
 
-**Pas de `Either` / `Result`.** Les échecs remontent en `ApiException` et sont
-portés par `AsyncValue`, qui est déjà un type somme et déjà intégré au
-framework. Un second mécanisme de résultat ferait doublon.
-
-**Pas de `AuthRepository`.** Il n'aurait fait que déléguer à `AuthApi`.
-`AuthController` combine directement deux collaborateurs — l'API et le magasin
-de jetons — et reste testable par surcharge de providers.
-
-`ReferenceRepository`, lui, **existe** : il porte une vraie logique de cache.
-C'est le critère retenu partout — une couche se justifie par un comportement,
-jamais par la symétrie du schéma.
-
----
-
-## Décisions d'architecture
-
-### ADR-001 — Les API sont des interfaces, avec une implémentation factice
-
-*Contexte.* Le backend n'a ni `routes/api.php` chargé, ni Sanctum (§6.1). Rien
-n'est appelable, et rien ne dit quand ça le sera.
-
-*Décision.* Chaque contrat serveur est une `abstract interface class`, avec deux
-implémentations : `Http…Api` et `Mock…Api`. Un provider choisit selon
-`Env.useMocks`.
-
-*Conséquences.* Le mobile avance sans attendre le backend et reste démontrable
-en permanence. Les mocks reproduisent les **comportements** du serveur — règles
-d'unicité, messages d'erreur français, format 422 par champ, compte créé
-désactivé — pas seulement ses données : un écran écrit contre le mock
-fonctionnera face à la vraie API. Le basculement est une variable de build,
-sans modification de code.
-
-### ADR-002 — Pas de base embarquée : `shared_preferences` en blobs JSON
-
-*Contexte.* Le cadrage suggérait Hive ou Drift pour le référentiel (~700 lignes)
-et le brouillon du wizard.
-
-*Décision.* Un magasin clé/valeur qui stocke du JSON sérialisé.
-
-*Conséquences.* Le référentiel est de toute façon chargé intégralement en
-mémoire : les cascades sont des `where` sur des listes. Une base embarquée
-n'apporterait ici que des adaptateurs générés et une initialisation
-asynchrone. À revoir le jour où il faudra requêter ou paginer localement —
-ce sera alors Drift, et le point de changement est confiné à `KeyValueStore`.
-
-### ADR-003 — `Demande` est un agrégat unique et immuable
-
-*Contexte.* `userdata.utilisateur_id` porte une contrainte UNIQUE (§2.1) : un
-candidat a **un** dossier. Et surtout, un `PUT` partiel **efface** côté serveur
-les formations et expériences absentes de la requête (§6.2 D1).
-
-*Décision.* Un seul modèle `Demande` immuable détient l'intégralité du dossier
-et est renvoyé entier à chaque enregistrement. Pas d'état de formulaire
-éparpillé par écran.
-
-*Conséquences.* C'est la protection de l'app contre la destruction silencieuse
-de données. Elle tient même si le correctif D1 n'arrive jamais côté backend.
-Corollaire : l'app ne propose jamais « nouvelle demande » — le parcours est
-*créer si absent, sinon éditer*.
-
-### ADR-004 — `ApiException` s'arrête à `ApiClient`
-
-*Contexte.* Le cadrage proposait `validateStatus: code < 500`, ce qui oblige
-chaque appel à tester le code de statut lui-même.
-
-*Décision.* `ApiClient` laisse Dio lever, attrape `DioException` en un point
-unique et la traduit en `ApiException` porteuse d'un message français, du code
-de statut et des erreurs par champ.
-
-*Conséquences.* Dépôts, contrôleurs et écrans ignorent totalement Dio. La
-traduction des erreurs vit à un seul endroit. Remplacer Dio ne toucherait qu'un
-fichier.
-
-### ADR-005 — `core` ne connaît aucune feature
-
-*Contexte.* Sur un 401, la couche réseau doit provoquer une déconnexion — ce
-qui est une affaire d'authentification.
-
-*Décision.* La couche réseau publie un signal (`SessionExpiry`), le module
-d'authentification s'y abonne.
-
-*Conséquences.* La dépendance pointe de `features/auth` vers `core`, jamais
-l'inverse. Le socle reste réutilisable et testable seul.
-
----
-
----
-
-## Design
-
-### Palette — issue du logo, pas des maquettes
-
-Les captures de `inspirations/` ont servi de référence pour le **langage de
-mise en page** : beaucoup de blanc, formes très arrondies, boutons pilule,
-grands titres serrés, cartes cernées plutôt qu'ombrées. Leur indigo, lui, n'a
-pas été repris : les couleurs sont relevées au pixel dans `assets/logo_fp.png`.
-
-| Rôle | Couleur | Usage |
-| :--- | :--- | :--- |
-| Action | **#009454** vert | Boutons, liens, états actifs, focus |
-| Accent | **#FFCC34** jaune | Badges, étape en cours — **jamais une action** |
-| Alerte | **#F43438** rouge | Erreurs **uniquement** |
-| Texte | **#272825** anthracite | Titres et corps de texte |
-
-Le rouge ne sert à rien d'autre qu'aux erreurs. Sur un formulaire de trente
-champs, un rouge décoratif détruirait la seule couleur d'alerte disponible.
-
-Typographie : **Poppins** (4 graisses, 628 Ko), embarquée dans l'APK. Pas de
-`google_fonts` : l'app doit fonctionner hors ligne dès le premier lancement.
-
-### Responsive
-
-`lib/core/ui/responsive.dart` porte trois seuils de largeur — téléphone
-(< 600), tablette (600–900), large (≥ 900) — et `ConteneurPage`, qui centre le
-contenu et plafonne sa largeur (520 px pour un formulaire, 760 px pour une
-liste). Sans ce plafond, un champ de saisie s'étire sur 1200 px de tablette et
-la page paraît vide. Un test le verrouille :
-« sur tablette, le formulaire reste dans une largeur lisible ».
-
-### Illustrations
-
-Dessinées en Flutter (`lib/core/ui/illustrations.dart`), pas importées. Elles
-reprennent l'ADN du logo — un arc ouvert, des silhouettes en croissant
-surmontées d'une tête ronde — obtenues par soustraction de deux disques plutôt
-qu'à coups de courbes. Conséquences : 0 Ko d'assets, net à toute résolution,
-et impossible de dériver du logo par accident.
-
-### Séquence d'ouverture
-
-```
-splash natif  →  splash animé  →  onboarding (1er lancement)  →  connexion
-(pas de flash    logo + titre     3 écrans                       ou dossier
- blanc)          + liseré         « Passer » toujours offert
-                 tricolore
-```
-
-Le routeur ne quitte le splash qu'à **deux** conditions réunies : session
-restaurée *et* animation terminée. Sans la seconde, une session restaurée en
-40 ms ferait clignoter l'écran suivant.
-
-Les trois écrans d'onboarding ne sont pas décoratifs. Chacun désamorce une
-cause d'abandon identifiée dans le cadrage :
-
-1. **« Une demande, un dossier »** — `utilisateur_id` est UNIQUE (§2.1). Sans
-   cette explication, le candidat cherche un bouton « nouvelle demande » qui
-   n'existera jamais.
-2. **« Préparez vos pièces »** — formats et poids sont **refusés par le
-   serveur** (§4, étape 2). C'est le premier mur rencontré ; l'annoncer avant
-   évite un 422 incompréhensible au milieu du formulaire.
-3. **« Quatre étapes, à votre rythme »** — trente champs sur un réseau
-   instable (§8.8). Annoncer la sauvegarde locale avant de commencer.
-
-### Identité de l'application
+## Icônes et écran de lancement
 
 ```bash
-dart run flutter_launcher_icons        # icônes Android + iOS
-dart run flutter_native_splash:create  # écran natif de lancement
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
 ```
 
-Les deux sont configurés en fin de `pubspec.yaml`. Le logo fourni était un PNG
-encapsulé dans un wrapper SVG : il a été extrait en `assets/logo_fp.png`, puis
-recadré avec marges pour l'icône adaptative Android (zone sûre de 66 %).
+Configuration en fin de `pubspec.yaml`, logo dans `assets/logo_fp.png`.
 
-## Conventions
+## Documentation
 
-- **Français partout** : noms de domaine (`Demande`, `EtapeWizard`,
-  `Referentiel`), libellés, commentaires. Seul le vocabulaire imposé par le
-  serveur reste tel quel (`username`, `numberid`, `emploi1_id`).
-- **`flutter analyze` à zéro.** Les règles sont volontairement strictes
-  (`strict-casts`, `avoid_dynamic_calls`, `prefer_final_locals`…) :
-  voir `analysis_options.yaml`.
-- **Les ids magiques n'existent pas en dur.** `Academic.sansDiplomeId` (14, pas
-  20 — §6.1 B4), `Region.horsSenegalId` (15).
-- **Les valeurs contraintes sont des énumérations.** `Genre`,
-  `SituationMatrimoniale` : la base accepte n'importe quelle chaîne, mais une
-  valeur hors liste rend le candidat invisible aux filtres de l'administration.
-  L'énumération porte la valeur exacte attendue (`Feminin`, sans accent).
-- **Les tests portent sur les pièges, pas sur la couverture.** Ce qui est testé
-  aujourd'hui : complétude des étapes, expériences effectivement conservées,
-  ordre imposé des niveaux d'études, routage des erreurs 422, aller-retour JSON
-  du cache, démarrage de l'app.
-
----
-
-## Contrat d'interface API v1
-
-L'app est alignée sur `docs/CONTRAT_INTERFACE_API_MOBILE_v2.md` (la v1 du 5 octobre 2026 est archivée à côté). Basculer sur le vrai
-serveur ne demande qu'un drapeau :
-
-```bash
-flutter run --dart-define=USE_MOCKS=false             --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
-```
-
-### Ce que le contrat a changé
-
-Le contrat est arrivé après une première implémentation déduite de
-`MOBILE_FLUTTER.md`. Trois écarts étaient structurels, pas cosmétiques :
-
-| | Hypothèse initiale | Contrat v1 | Conséquence |
-| :-- | :-- | :-- | :-- |
-| Réponses | corps JSON brut | `{success, message, data}` | déballé une fois pour toutes dans `ApiClient` |
-| Écriture du dossier | **un** `PUT` portant l'agrégat entier | **quatre** `PUT`, un par étape | une étape ne peut plus en effacer une autre |
-| Lien formation ↔ diplôme | impossible côté serveur | `formation_index` (§6.4), `diplome_file_url` (§5.1) | le lien est natif ; le contournement par nom de fichier a été supprimé |
-
-Le troisième point mérite un mot : faute de colonne pour le porter, le rang de
-la formation avait dû être encodé dans le **nom du fichier déposé**. Le
-contrat rend cette gymnastique inutile — `Formation.justificatif` est
-désormais un champ à part entière, et `lien_justificatif.dart` a disparu.
-
-### Correspondance des endpoints
-
-| Contrat | Implémentation |
-| :-- | :-- |
-| `POST /auth/register`, `/auth/login` | `HttpAuthApi` — un jeton est émis **dès l'inscription** |
-| `GET /auth/me`, `POST /auth/logout` | idem ; `profile_summary.has_userdata` alimente `Utilisateur.hasProfile` |
-| `POST /auth/forgot-password` | email seul |
-| `GET /reference/all` | `HttpReferenceApi` + `ReferentielMapper` |
-| `GET /candidat/profile` | `DemandeMapper.depuisApi` |
-| `PUT /candidat/{identity,formations,experiences,target-jobs}` | `DemandeMapper.identite / formations / experiences / voeux` |
-| `POST /candidat/files/{photo,cv,diplome}`, `DELETE .../cv` | `HttpDemandeApi` |
-
-Plafonds et formats suivent le contrat, et diffèrent par nature de pièce :
-photo 4 Mo (JPG/PNG/WEBP), documents 8 Mo. **Le justificatif de diplôme
-accepte les images** : un candidat peut photographier son diplôme, ce que
-l'ancienne règle refusait.
-
-### Points à trancher avec l'équipe backend
-
-1. **Quatre écrans sans endpoint.** Vérification d'email, saisie du code,
-   changement de mot de passe et test de disponibilité d'un identifiant
-   n'existent pas en v1. Les écrans fonctionnent sur le faux backend ;
-   `HttpAuthApi` les refuse d'un message explicite plutôt que d'appeler une
-   route imaginaire. Le routeur, lui, retient toujours un compte
-   `enabled: false` sur l'écran de vérification — **sans route pour
-   l'activer, ce compte est bloqué**. C'est le point le plus urgent.
-2. **`GET /candidat/profile` ne renvoie pas `hasExperience`.** Une liste
-   d'expériences vide ne permet pas de distinguer « je n'en ai pas » de « je
-   n'ai pas encore répondu ». L'app laisse l'étape 3 ouverte plutôt que
-   d'inventer une réponse.
-3. **`academic_id` « sans diplôme » vaut 14 ou 20 selon la source.** Les deux
-   sont reconnus en lecture ; l'écriture envoie la chaîne `"sansdiplome"`,
-   seule forme que les deux versions interprètent pareil.
-4. **Aucune suppression de justificatif de diplôme** (seul le CV en a une).
-   Retirer une pièce se fait donc en n'envoyant plus son
-   `existing_diplome_file` au `PUT` suivant.
-5. **Le §4 ne donne aucun exemple de réponse** pour `/reference/all` :
-   `ReferentielMapper` accepte plusieurs orthographes de clés en attendant
-   une trace réelle. À figer dès le premier appel abouti.
-6. **Pas de route « pays »** alors que la région « Hors Sénégal » en suppose
-   une. Le champ est masqué tant que la liste est vide.
-7. **`recruted` n'est pas renvoyé** : le bandeau « Recruté » de l'accueil
-   reste muet.
-
-## Couverture du cadrage
-
-Le parcours du §3.1 est couvert de bout en bout : inscription, activation par
-code, connexion, wizard, pièces jointes, résumé, mot de passe.
-
-| § | Exigence | Où |
-| :--- | :--- | :--- |
-| 3.2 / 7.2 | Inscription, double saisie email | `auth/ui/inscription_page.dart` |
-| 7.4 | Disponibilité en direct des trois champs uniques | idem, saisie débattue à 550 ms |
-| 3.3 / 7.2 | Connexion par **username** | `auth/ui/connexion_page.dart` |
-| 3.4 / 7.2 | Activation par code à six chiffres | `auth/ui/verification_email_page.dart` |
-| 7.2 | Changement et réinitialisation du mot de passe | `auth/ui/mot_de_passe*.dart` |
-| 4 / 7.5 | Wizard en quatre étapes | `demande/ui/wizard_page.dart` |
-| 4-2 / 7.5 | Photo (étape 1), diplômes (étape 2) | `demande/ui/etapes/pieces_jointes.dart` |
-| 7.6 | Bloc `fichiers`, URLs absolues et encodées | `demande/data/demande_mapper.dart` |
-| 3.1 / 8.3 | Résumé du dossier en lecture seule | `demande/ui/resume_page.dart` |
-| 8.8 | Brouillon local | `demande/data/brouillon_store.dart` |
-| 8.9 | Validation du téléphone SN + international | `demande/domain/telephone.dart` |
-| 2.2 | `recruted` affiché au candidat | `demande/ui/accueil_page.dart` |
-
-### Les pièces jointes
-
-**La photo ouvre l'étape 1**, avec l'état civil : c'est une pièce d'identité,
-pas un justificatif de parcours. Le formulaire web la place à l'étape 2 ; la
-correspondance champ → étape du §8.7 a été recalée en conséquence, pour qu'un
-422 sur `photo_profil` renvoie là où le champ se trouve réellement. Elle se
-choisit dans la photothèque uniquement : un portrait d'identité se prépare, il
-ne s'improvise pas devant l'appareil au milieu d'un formulaire.
-
-**Le CV n'est plus demandé** : le serveur doit le produire à partir du dossier,
-qui contient déjà tout. `TypeFichier.cv` et les appels correspondants restent
-en place — un CV déposé auparavant continue de s'afficher dans le résumé — et
-`TypeFichier.proposes` est le seul point à modifier pour le rétablir.
-
-Deux comportements côté serveur (§4, §7.5) :
-
-- **avant le premier enregistrement**, les fichiers sont mis en file et partent
-  avec le dossier, comme le fait le formulaire web (§7.7b) ;
-- **ensuite**, ajout et suppression passent par les endpoints dédiés.
-
-Une seule règle vue de l'écran : on choisit, et tout part à l'enregistrement.
-Les contraintes serveur sont vérifiées **avant** l'envoi
-(`demande/domain/regles_fichiers.dart`) — un refus après une minute de
-téléversement sur un réseau instable est la meilleure façon de perdre un
-candidat. Les photos sont compressées par paliers jusqu'à passer sous 2 Mo
-(§6.2 D5).
-
-Deux pièges du cadrage sont traités ici : les diplômes et CV **refusent les
-images** (§6.2 D4) — le message le dit et propose la conversion en PDF ; et
-les noms de fichiers du serveur portent espaces et accents non assainis, d'où
-l'encodage systématique des URLs (§8.9).
-
-## Suite des travaux
-
-1. **Branchement sur l'API réelle** : `--dart-define=USE_MOCKS=false`, une fois
-   les bloqueurs §6.1 levés côté backend.
-2. **Revalidation du référentiel par `ETag`** (§5.6) : aujourd'hui le cache est
-   rafraîchi en arrière-plan à chaque lancement, sans `If-None-Match`. À faire
-   quand l'endpoint existera et exposera l'en-tête.
-3. **Statut du dossier** (§6.2 D3) : `brouillon` / `soumise` / `traitée`
-   n'existe pas en base. L'app affiche donc une complétude, pas un suivi.
-
-### Écarts assumés
-
-- **`permission_handler` n'est pas installé**, contrairement au §8.2.
-  `image_picker` passe par le sélecteur photo d'Android 13+ et `file_picker`
-  par le *Storage Access Framework* : aucun des deux ne demande de permission
-  d'accès au stockage. Seule la caméra en exige une, et le plugin s'en charge.
-  Ajouter la dépendance sans l'utiliser ne ferait qu'alourdir l'APK.
-- **§6.1 B5** — les routes serveur de la photo de profil sont cassées
-  (`ArgumentCountError`). L'app appelle `POST /demande/photo` tel que spécifié
-  au §7.5 ; le correctif est attendu côté backend.
-
-### À trancher
-
-- **`applicationId`.** Toujours `com.example.pgde_app`. Une publication sur les
-  stores exige un identifiant définitif — il fige aussi l'arborescence Kotlin,
-  donc autant le choisir tôt.
-- **Plateformes.** Le projet ne cible qu'Android et iOS ; les dossiers `web/`,
-  `windows/`, `linux/` et `macos/` ont été retirés. Pour en réactiver un :
-  `flutter create --platforms=web .`
-
-### À relayer au backend
-
-Les bloqueurs du §6.1 restent entiers. Les trois qui empêchent toute mise en
-production, quelle que soit la qualité du mobile :
-
-- **B1 + B2** — charger `routes/api.php`, installer Sanctum. Sans quoi aucune
-  API n'existe.
-- **B3** — `autresdiplomes` est un `varchar(255)`, une seule formation en
-  occupe déjà 183. **Les formations multiples sont impossibles aujourd'hui**,
-  sur mobile comme sur le web.
-- **D6** — les pièces d'identité et diplômes sont écrits dans `public/uploads/`,
-  accessibles sans authentification. À traiter comme un risque de
-  confidentialité, pas comme une dette technique.
+| Document | Contenu |
+| :--- | :--- |
+| [docs/CONTRAT_INTERFACE_API_MOBILE_v2.md](docs/CONTRAT_INTERFACE_API_MOBILE_v2.md) | Contrat d'API en vigueur (v1 archivée à côté) |
+| [CONTRAT_CHATBOT_MOBILE.md](CONTRAT_CHATBOT_MOBILE.md) | Contrat du chatbot |
+| [MOBILE_FLUTTER.md](MOBILE_FLUTTER.md) | Cadrage métier, références `§x.y` du code |
+| [AUDIT_2026-11-23.md](AUDIT_2026-11-23.md) | Audit sécurité et suivi des correctifs |
+| [docs/DICTEE_VOCALE.md](docs/DICTEE_VOCALE.md) | Dictée vocale |
