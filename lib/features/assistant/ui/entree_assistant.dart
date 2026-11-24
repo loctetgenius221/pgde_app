@@ -91,7 +91,7 @@ class _EntreeAssistantState extends State<EntreeAssistant> {
 
     return Semantics(
       button: true,
-      label: 'Ndimbal, assistant IA. Poser une question sur votre dossier.',
+      label: 'Amath, assistant virtuel. Ouvrir la conversation.',
       child: GestureDetector(
         onTap: () => context.push(Routes.assistant),
         behavior: HitTestBehavior.opaque,
@@ -127,7 +127,7 @@ class _EntreeAssistantState extends State<EntreeAssistant> {
                 ],
               ),
               child: Text(
-                'Ndimbal',
+                'Amath',
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurface,
                 ),

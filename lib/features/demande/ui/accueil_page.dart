@@ -9,6 +9,7 @@ import '../../../core/ui/frise_etapes.dart';
 import '../../../core/ui/icone.dart';
 import '../../../core/ui/pied_institutionnel.dart';
 import '../../../core/ui/responsive.dart';
+import '../../assistant/data/historique_store.dart';
 import '../../assistant/ui/entree_assistant.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/utilisateur.dart';
@@ -397,6 +398,8 @@ Future<void> _seDeconnecter(BuildContext context, WidgetRef ref) async {
   }
 
   await ref.read(demandeControllerProvider.notifier).effacerLesDonneesLocales();
+  // La conversation avec Amath peut contenir une CNI, un matricule.
+  await ref.read(historiqueStoreProvider).purger();
   await ref.read(authControllerProvider.notifier).deconnexion();
 }
 

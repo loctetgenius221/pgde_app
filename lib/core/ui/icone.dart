@@ -185,4 +185,15 @@ abstract final class Icones {
   static const DonneesIcone envoyer = HugeIcons.strokeRoundedSent;
   static const DonneesIcone nouvelleConversation =
       HugeIcons.strokeRoundedBubbleChatAdd;
+
+  // Boutons d'Amath, choisis d'après l'intention (contrat chatbot §5).
+  static const DonneesIcone maison = HugeIcons.strokeRoundedHome01;
+  static const DonneesIcone retour = HugeIcons.strokeRoundedArrowTurnBackward;
+  static const DonneesIcone croix = HugeIcons.strokeRoundedCancel01;
+  static const DonneesIcone ajoutCompte = HugeIcons.strokeRoundedUserAdd01;
+  static const DonneesIcone connexion = HugeIcons.strokeRoundedLogin01;
+  static const DonneesIcone cle = HugeIcons.strokeRoundedKey01;
+  static const DonneesIcone graphique = HugeIcons.strokeRoundedAnalytics01;
+  static const DonneesIcone info = HugeIcons.strokeRoundedInformationCircle;
+  static const DonneesIcone horloge = HugeIcons.strokeRoundedClock01;
 }

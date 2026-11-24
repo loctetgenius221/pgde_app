@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,7 +9,9 @@ import '../../../core/ui/responsive.dart';
 import '../application/conversation_controller.dart';
 import '../domain/message.dart';
 import 'entree_assistant.dart';
+import 'icone_bouton_chat.dart';
 import 'ndimbal.dart';
+import 'texte_chatbot.dart';
 
 /// Étiquette de la transition partagée entre l'accueil et cet écran.
 ///
@@ -17,7 +20,10 @@ import 'ndimbal.dart';
 /// substitue à un autre.
 const String heroNdimbal = 'ndimbal-avatar';
 
-/// Conversation avec Ndimbal.
+/// Conversation avec Amath, l'assistant virtuel du ministère.
+///
+/// L'écran ne connaît aucun parcours : il affiche les bulles et les boutons
+/// que renvoie le chatbot (contrat chatbot §1).
 class AssistantPage extends ConsumerStatefulWidget {
   const AssistantPage({super.key});
 
@@ -29,12 +35,8 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
   final TextEditingController _saisie = TextEditingController();
   final ScrollController _defilement = ScrollController();
 
-  /// Vrai le temps de la salutation d'ouverture (§F, « GREETING »).
-  ///
-  /// On salue **à l'arrivée** plutôt qu'avant de naviguer : retarder l'écran
-  /// de huit dixièmes de seconde pour jouer une animation rendrait l'appui
-  /// mou. Ici le geste répond tout de suite, et la politesse se fait pendant
-  /// que l'écran s'installe.
+  /// Vrai le temps de la salutation d'ouverture : le personnage salue à
+  /// l'arrivée, pendant que la première réponse se prépare.
   bool _salue = true;
 
   @override
@@ -43,13 +45,14 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     Future<void>.delayed(const Duration(milliseconds: 1900), () {
       if (mounted) setState(() => _salue = false);
     });
-    _saisie.addListener(() => setState(() {}));
+    // Après la première frame : on ne modifie pas un fournisseur pendant
+    // la construction du widget qui l'écoute.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(conversationProvider.notifier).ouvrir();
+      _versLeBas(anime: false);
+    });
   }
-
-  /// La pose du personnage — distincte de l'état de la conversation : il
-  /// salue à l'arrivée, puis garde le sourire tant qu'on lui parle. Sur
-  /// l'accueil, il reste en veille, bouche droite.
-  PoseNdimbal get _pose => _salue ? PoseNdimbal.salut : PoseNdimbal.sourire;
 
   @override
   void dispose() {
@@ -58,32 +61,39 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
     super.dispose();
   }
 
-  void _envoyer([String? suggestion, String? payload]) {
-    final String texte = suggestion ?? _saisie.text;
+  void _envoyer() {
+    final String texte = _saisie.text;
     if (texte.trim().isEmpty) return;
     _saisie.clear();
-    ref.read(conversationProvider.notifier).envoyer(texte, payload: payload);
-    _versLeBas();
+    ref.read(conversationProvider.notifier).envoyer(texte);
   }
 
-  /// Suit la réponse qui s'écrit.
+  /// Suit la réponse qui arrive.
   ///
   /// Après la frame : la bulle n'a pas encore sa hauteur définitive au moment
   /// où l'état change, et on défilerait vers une position périmée.
-  void _versLeBas() {
+  void _versLeBas({bool anime = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_defilement.hasClients) return;
-      _defilement.animateTo(
-        _defilement.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
+      final double fin = _defilement.position.maxScrollExtent;
+      if (anime) {
+        _defilement.animateTo(
+          fin,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _defilement.jumpTo(fin);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final Conversation conversation = ref.watch(conversationProvider);
+    final ConversationController controleur = ref.read(
+      conversationProvider.notifier,
+    );
     ref.listen(conversationProvider, (_, _) => _versLeBas());
 
     return Scaffold(
@@ -91,41 +101,39 @@ class _AssistantPageState extends ConsumerState<AssistantPage> {
         titleSpacing: 0,
         title: Row(
           children: <Widget>[
-            // Le visage seul : à cette taille, le personnage entier ne
-            // serait qu'une tache.
             const PastilleNdimbal(taille: 36, anime: true),
             const SizedBox(width: Espace.sm),
             Expanded(child: _Entete(etat: conversation.etat)),
           ],
         ),
         actions: <Widget>[
-          if (!conversation.vierge)
-            IconButton(
-              tooltip: 'Nouvelle conversation',
-              onPressed: () =>
-                  ref.read(conversationProvider.notifier).reinitialiser(),
-              icon: const Icone(Icones.nouvelleConversation),
-            ),
+          // Toujours actif, même pendant un envoi : c'est l'issue de secours
+          // quand la conversation ne correspond plus à ce qu'attend Amath.
+          IconButton(
+            tooltip: 'Nouvelle conversation',
+            onPressed: () {
+              _saisie.clear();
+              controleur.nouvelleConversation();
+            },
+            icon: const Icone(Icones.reessayer),
+          ),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: <Widget>[
             Expanded(
-              child: conversation.vierge
-                  ? _Accueil(pose: _pose, onSuggestion: _envoyer)
-                  : _Fil(
-                      conversation: conversation,
-                      controleur: _defilement,
-                      onBouton: (bouton) =>
-                          _envoyer(bouton.titre, bouton.payload),
-                    ),
+              child: _Fil(
+                conversation: conversation,
+                pose: _salue ? PoseNdimbal.salut : PoseNdimbal.sourire,
+                controleur: _defilement,
+                onBouton: controleur.choisir,
+                onReessayer: controleur.reessayer,
+              ),
             ),
-            if (conversation.erreur case final String erreur)
-              _BandeauErreur(erreur),
             _BarreSaisie(
               controleur: _saisie,
-              actif: !conversation.etat.occupe,
+              conversation: conversation,
               onEnvoyer: _envoyer,
             ),
           ],
@@ -149,7 +157,7 @@ class _Entete extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Text('Ndimbal', style: theme.textTheme.titleMedium),
+        Text('Amath', style: theme.textTheme.titleMedium),
         // L'état est **écrit**, pas seulement animé : une animation seule
         // n'est lisible ni par un lecteur d'écran ni par quelqu'un qui a
         // désactivé les animations.
@@ -157,8 +165,8 @@ class _Entete extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           child: Text(
             switch (etat) {
-              EtatAssistant.repos => 'Assistant de la plateforme',
-              EtatAssistant.reflexion => 'Réfléchit…',
+              EtatAssistant.repos => 'Assistant virtuel',
+              EtatAssistant.reflexion => 'Amath écrit…',
             },
             key: ValueKey<EtatAssistant>(etat),
             style: theme.textTheme.bodySmall,
@@ -169,234 +177,311 @@ class _Entete extends StatelessWidget {
   }
 }
 
-/// Premier écran : l'avatar en grand, et de quoi démarrer sans réfléchir.
-class _Accueil extends StatelessWidget {
-  const _Accueil({required this.pose, required this.onSuggestion});
-
-  final PoseNdimbal pose;
-  final ValueChanged<String> onSuggestion;
-
-  static const List<String> _suggestions = <String>[
-    'Quelles pièces dois-je fournir ?',
-    'Comment remplir mes formations ?',
-    'Où en est mon dossier ?',
-    'Je n’ai pas de diplôme, que faire ?',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SingleChildScrollView(
-      child: ConteneurPage(
-        child: Column(
-          children: <Widget>[
-            const SizedBox(height: Espace.lg),
-            Hero(
-              tag: heroNdimbal,
-              // `FittedBox` : le vol interpole un rectangle, de la taille
-              // qu'occupait le personnage dans le coin de l'accueil à
-              // celle-ci. Sans lui, il garderait sa taille d'arrivée pendant
-              // tout le trajet et sauterait au départ.
-              flightShuttleBuilder: (_, _, _, _, _) => FittedBox(
-                fit: BoxFit.contain,
-                child: Ndimbal(pose: pose, taille: 150),
-              ),
-              child: Ndimbal(
-                taille: context.selonFormat<double>(
-                  telephone: 132,
-                  tablette: 150,
-                ),
-                pose: pose,
-              ),
-            ),
-            const SizedBox(height: Espace.md),
-            Text(
-              'Comment puis-je vous aider ?',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall,
-            ),
-            const SizedBox(height: Espace.xs),
-            Text(
-              'Je réponds sur votre dossier de demande d’emploi.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: Espace.xl),
-
-            // Des questions toutes faites plutôt qu'un champ vide : c'est ce
-            // qui lève la « page blanche », le premier obstacle de tout
-            // assistant conversationnel.
-            for (final String suggestion in _suggestions)
-              Padding(
-                padding: const EdgeInsets.only(bottom: Espace.xs),
-                child: _Suggestion(
-                  texte: suggestion,
-                  onTap: () => onSuggestion(suggestion),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Suggestion extends StatelessWidget {
-  const _Suggestion({required this.texte, required this.onTap});
-
-  final String texte;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(Rayon.pilule),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(Rayon.pilule),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Rayon.pilule),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Espace.md,
-              vertical: Espace.sm,
-            ),
-            child: Row(
-              children: <Widget>[
-                Expanded(child: Text(texte, style: theme.textTheme.bodyMedium)),
-                Icone(
-                  Icones.suivant,
-                  taille: 18,
-                  couleur: theme.colorScheme.primary,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Le fil de l'échange.
+/// Le fil : présentation d'Amath, bulles, indicateur de frappe, erreur.
 class _Fil extends StatelessWidget {
   const _Fil({
     required this.conversation,
+    required this.pose,
     required this.controleur,
     required this.onBouton,
+    required this.onReessayer,
   });
 
   final Conversation conversation;
+  final PoseNdimbal pose;
   final ScrollController controleur;
   final ValueChanged<BoutonChat> onBouton;
+  final VoidCallback onReessayer;
 
   @override
   Widget build(BuildContext context) {
-    final bool attend = conversation.etat == EtatAssistant.reflexion;
+    final List<Message> messages = conversation.messages;
+    final ErreurChat? erreur = conversation.erreur;
 
-    return ListView.builder(
+    return ListView(
       controller: controleur,
-      padding: const EdgeInsets.symmetric(vertical: Espace.md),
-      itemCount: conversation.messages.length + (attend ? 1 : 0),
-      itemBuilder: (context, i) {
-        if (i == conversation.messages.length) return const _Frappe();
-        return _Bulle(message: conversation.messages[i], onBouton: onBouton);
-      },
+      padding: const EdgeInsets.only(bottom: Espace.md),
+      children: <Widget>[
+        _Presentation(pose: pose),
+        for (int i = 0; i < messages.length; i++)
+          _Bulle(
+            message: messages[i],
+            boutonsActifs: conversation.boutonsActifs(i),
+            onBouton: onBouton,
+          ),
+        if (conversation.etat.occupe) const _Frappe(),
+        if (erreur != null && !conversation.etat.occupe)
+          _BulleErreur(erreur: erreur, onReessayer: onReessayer),
+      ],
     );
   }
 }
 
-class _Bulle extends StatelessWidget {
-  const _Bulle({required this.message, required this.onBouton});
+/// Le personnage en tête du fil — point d'arrivée de la transition depuis
+/// l'accueil.
+class _Presentation extends StatelessWidget {
+  const _Presentation({required this.pose});
 
-  final Message message;
-  final ValueChanged<BoutonChat> onBouton;
+  final PoseNdimbal pose;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bool deNdimbal = message.vientDeNdimbal;
+    final double taille = context.selonFormat<double>(
+      telephone: 96,
+      tablette: 120,
+    );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         Espace.md,
-        Espace.xxs,
+        Espace.lg,
         Espace.md,
-        Espace.xxs,
+        Espace.md,
       ),
-      child: Row(
-        mainAxisAlignment: deNdimbal
-            ? MainAxisAlignment.start
-            : MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
         children: <Widget>[
-          if (deNdimbal) ...<Widget>[
-            const PastilleNdimbal(),
-            const SizedBox(width: Espace.xs),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: deNdimbal
-                  ? CrossAxisAlignment.start
-                  : CrossAxisAlignment.end,
+          Hero(
+            tag: heroNdimbal,
+            // `FittedBox` : le vol interpole un rectangle, de la taille
+            // qu'occupait le personnage dans le coin de l'accueil à celle-ci.
+            flightShuttleBuilder: (_, _, _, _, _) => FittedBox(
+              fit: BoxFit.contain,
+              child: Ndimbal(pose: pose, taille: taille),
+            ),
+            child: Ndimbal(taille: taille, pose: pose),
+          ),
+          const SizedBox(height: Espace.sm),
+          Text('Amath', style: theme.textTheme.titleMedium),
+          Text(
+            'Assistant virtuel du ministère de la Fonction publique',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Alignement et pastille d'une bulle, selon qui parle.
+class _Ligne extends StatelessWidget {
+  const _Ligne({required this.deLAssistant, required this.child});
+
+  final bool deLAssistant;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      Espace.md,
+      Espace.xxs,
+      Espace.md,
+      Espace.xxs,
+    ),
+    child: Row(
+      mainAxisAlignment: deLAssistant
+          ? MainAxisAlignment.start
+          : MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        if (deLAssistant) ...<Widget>[
+          const PastilleNdimbal(),
+          const SizedBox(width: Espace.xs),
+        ],
+        Flexible(child: child),
+      ],
+    ),
+  );
+}
+
+/// Forme d'une bulle : coin pointu du côté de celui qui parle.
+BoxDecoration _forme(Color couleur, {required bool deLAssistant}) =>
+    BoxDecoration(
+      color: couleur,
+      borderRadius: BorderRadius.only(
+        topLeft: const Radius.circular(Rayon.lg),
+        topRight: const Radius.circular(Rayon.lg),
+        bottomLeft: Radius.circular(deLAssistant ? Rayon.sm : Rayon.lg),
+        bottomRight: Radius.circular(deLAssistant ? Rayon.lg : Rayon.sm),
+      ),
+    );
+
+class _Bulle extends StatelessWidget {
+  const _Bulle({
+    required this.message,
+    required this.boutonsActifs,
+    required this.onBouton,
+  });
+
+  final Message message;
+  final bool boutonsActifs;
+  final ValueChanged<BoutonChat> onBouton;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bool deLAssistant = message.vientDeLAssistant;
+    final TextStyle? style = theme.textTheme.bodyLarge?.copyWith(
+      color: deLAssistant
+          ? theme.colorScheme.onSurface
+          : theme.colorScheme.onPrimary,
+      height: 1.4,
+    );
+
+    return _Ligne(
+      deLAssistant: deLAssistant,
+      child: Column(
+        crossAxisAlignment: deLAssistant
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.end,
+        children: <Widget>[
+          if (message.texte.isNotEmpty)
+            Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              padding: const EdgeInsets.symmetric(
+                horizontal: Espace.md,
+                vertical: Espace.sm,
+              ),
+              decoration: _forme(
+                deLAssistant
+                    ? theme.colorScheme.surfaceContainerHighest
+                    : theme.colorScheme.primary,
+                deLAssistant: deLAssistant,
+              ),
+              // Le candidat s'affiche en texte brut : ce qu'il tape n'est
+              // jamais interprété.
+              child: deLAssistant
+                  ? TexteChatbot(message.texte, style: style)
+                  : Text(message.texte, style: style),
+            ),
+          if (message.imageUrl case final String url)
+            Padding(
+              padding: const EdgeInsets.only(top: Espace.xxs),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(Rayon.lg),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            ),
+          if (message.boutons.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: Espace.xs),
+              child: Wrap(
+                spacing: Espace.xs,
+                runSpacing: Espace.xs,
+                children: <Widget>[
+                  for (final BoutonChat bouton in message.boutons)
+                    _BoutonAmath(
+                      bouton: bouton,
+                      onPressed: boutonsActifs ? () => onBouton(bouton) : null,
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BoutonAmath extends StatelessWidget {
+  const _BoutonAmath({required this.bouton, required this.onPressed});
+
+  final BoutonChat bouton;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final DonneesIcone? icone = iconeDuBouton(bouton);
+    final Widget libelle = Text(bouton.titre);
+    final ButtonStyle style = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 40),
+      padding: const EdgeInsets.symmetric(horizontal: Espace.md),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Rayon.pilule),
+      ),
+      visualDensity: VisualDensity.compact,
+    );
+
+    return icone == null
+        ? OutlinedButton(onPressed: onPressed, style: style, child: libelle)
+        : OutlinedButton.icon(
+            onPressed: onPressed,
+            style: style,
+            icon: Icone(icone, taille: 16),
+            label: libelle,
+          );
+  }
+}
+
+/// Échec d'un envoi : la bulle du candidat reste affichée au-dessus.
+class _BulleErreur extends StatelessWidget {
+  const _BulleErreur({required this.erreur, required this.onReessayer});
+
+  final ErreurChat erreur;
+  final VoidCallback onReessayer;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return _Ligne(
+      deLAssistant: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            constraints: const BoxConstraints(maxWidth: 520),
+            padding: const EdgeInsets.symmetric(
+              horizontal: Espace.md,
+              vertical: Espace.sm,
+            ),
+            decoration: _forme(
+              theme.colorScheme.errorContainer,
+              deLAssistant: true,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                if (message.texte.isNotEmpty)
-                  Container(
-                    constraints: const BoxConstraints(maxWidth: 520),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Espace.md,
-                      vertical: Espace.sm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: deNdimbal
-                          ? theme.colorScheme.surfaceContainerHighest
-                          : theme.colorScheme.primary,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(Rayon.lg),
-                        topRight: const Radius.circular(Rayon.lg),
-                        bottomLeft: Radius.circular(
-                          deNdimbal ? Rayon.sm : Rayon.lg,
-                        ),
-                        bottomRight: Radius.circular(
-                          deNdimbal ? Rayon.lg : Rayon.sm,
-                        ),
-                      ),
-                    ),
-                    child: Text(
-                      message.texte,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: deNdimbal
-                            ? theme.colorScheme.onSurface
-                            : theme.colorScheme.onPrimary,
-                        height: 1.4,
-                      ),
+                Icone(
+                  Icones.alerte,
+                  taille: 18,
+                  couleur: theme.colorScheme.onErrorContainer,
+                ),
+                const SizedBox(width: Espace.xs),
+                Flexible(
+                  child: Text(
+                    erreur.texte,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
                     ),
                   ),
-                if (message.boutons.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Espace.xs),
-                    child: Wrap(
-                      spacing: Espace.xs,
-                      runSpacing: Espace.xs,
-                      children: <Widget>[
-                        for (final BoutonChat bouton in message.boutons)
-                          ActionChip(
-                            label: Text(bouton.titre),
-                            onPressed: () => onBouton(bouton),
-                          ),
-                      ],
-                    ),
-                  ),
+                ),
               ],
             ),
           ),
+          if (erreur.aRenvoyer != null)
+            Padding(
+              padding: const EdgeInsets.only(top: Espace.xs),
+              child: OutlinedButton.icon(
+                onPressed: erreur.enAttente ? null : onReessayer,
+                icon: const Icone(Icones.reessayer, taille: 16),
+                label: const Text('Réessayer'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(Rayon.pilule),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -427,53 +512,45 @@ class _FrappeState extends State<_Frappe> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Espace.md, Espace.xxs, 0, Espace.xxs),
-      child: Row(
-        children: <Widget>[
-          const PastilleNdimbal(anime: true),
-          const SizedBox(width: Espace.xs),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Espace.md,
-              vertical: Espace.sm + 2,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(Rayon.lg),
-                topRight: Radius.circular(Rayon.lg),
-                bottomLeft: Radius.circular(Rayon.sm),
-                bottomRight: Radius.circular(Rayon.lg),
-              ),
-            ),
-            child: AnimatedBuilder(
-              animation: _controleur,
-              builder: (context, _) => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  for (int i = 0; i < 3; i++)
-                    Padding(
-                      padding: EdgeInsets.only(right: i == 2 ? 0 : 5),
-                      child: Opacity(
-                        // Décalage d'un tiers de cycle par point : l'onde
-                        // court de gauche à droite.
-                        opacity: 0.3 + 0.7 * _intensite(i),
-                        child: Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+    return Semantics(
+      label: 'Amath écrit…',
+      child: _Ligne(
+        deLAssistant: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Espace.md,
+            vertical: Espace.sm + 2,
+          ),
+          decoration: _forme(
+            theme.colorScheme.surfaceContainerHighest,
+            deLAssistant: true,
+          ),
+          child: AnimatedBuilder(
+            animation: _controleur,
+            builder: (context, _) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (int i = 0; i < 3; i++)
+                  Padding(
+                    padding: EdgeInsets.only(right: i == 2 ? 0 : 5),
+                    child: Opacity(
+                      // Décalage d'un tiers de cycle par point : l'onde
+                      // court de gauche à droite.
+                      opacity: 0.3 + 0.7 * _intensite(i),
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -484,59 +561,21 @@ class _FrappeState extends State<_Frappe> with SingleTickerProviderStateMixin {
   }
 }
 
-class _BandeauErreur extends StatelessWidget {
-  const _BandeauErreur(this.message);
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(Espace.md, 0, Espace.md, Espace.xs),
-      padding: const EdgeInsets.all(Espace.sm),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(Rayon.md),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icone(
-            Icones.alerte,
-            taille: 18,
-            couleur: theme.colorScheme.onErrorContainer,
-          ),
-          const SizedBox(width: Espace.xs),
-          Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _BarreSaisie extends StatelessWidget {
   const _BarreSaisie({
     required this.controleur,
-    required this.actif,
+    required this.conversation,
     required this.onEnvoyer,
   });
 
   final TextEditingController controleur;
-  final bool actif;
+  final Conversation conversation;
   final VoidCallback onEnvoyer;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bool actif = !conversation.saisieBloquee;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -558,28 +597,51 @@ class _BarreSaisie extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controleur,
+                enabled: actif,
                 minLines: 1,
                 maxLines: 4,
+                maxLength: ConversationController.longueurMax,
+                // Le plafond est appliqué sans compteur : il n'est atteint
+                // qu'exceptionnellement et encombrerait chaque saisie.
+                buildCounter:
+                    (
+                      _, {
+                      required currentLength,
+                      required isFocused,
+                      maxLength,
+                    }) => null,
+                // Clavier numérique proposé pour une CNI, jamais imposé par
+                // une validation : c'est Amath qui vérifie le format.
+                keyboardType: conversation.attendUneCni
+                    ? TextInputType.number
+                    : TextInputType.text,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => onEnvoyer(),
                 decoration: InputDecoration(
-                  hintText: 'Posez votre question…',
-                  // Poser sa question à voix haute : le geste naturel face à
-                  // un assistant. Plafonnée à 1000 caractères, comme l'API.
-                  suffixIcon: BoutonDictee(
-                    texteActuel: () => controleur.text,
-                    onTexte: (texte) => controleur.value = TextEditingValue(
-                      text: texte,
-                      selection: TextSelection.collapsed(offset: texte.length),
-                    ),
-                    longueurMax: 1000,
-                  ),
+                  hintText: conversation.etat.occupe
+                      ? 'Amath écrit…'
+                      : actif
+                      ? 'Écrivez votre message…'
+                      : 'Utilisez les boutons ci-dessus…',
+                  // Dicter sa réponse : le geste naturel face à un
+                  // assistant. Absent quand la saisie est fermée.
+                  suffixIcon: actif
+                      ? BoutonDictee(
+                          texteActuel: () => controleur.text,
+                          onTexte: (texte) =>
+                              controleur.value = TextEditingValue(
+                                text: texte,
+                                selection: TextSelection.collapsed(
+                                  offset: texte.length,
+                                ),
+                              ),
+                          longueurMax: ConversationController.longueurMax,
+                        )
+                      : null,
                 ),
               ),
             ),
             const SizedBox(width: Espace.xs),
-            // Le bouton se désactive pendant la réponse : deux flux
-            // concurrents entrelaceraient leurs mots dans la même bulle.
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controleur,
               builder: (context, valeur, _) {
