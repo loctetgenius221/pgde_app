@@ -19,18 +19,22 @@ abstract class Utilisateur with _$Utilisateur {
     required String numberid,
     required String email,
 
-    /// `enabled` en base : faux tant que l'email n'est pas vérifié (§3.2).
-    /// La connexion réussit malgré tout (bug BUG-02) : c'est l'app qui
-    /// aiguille vers l'écran de vérification.
+    /// `enabled` en base : faux tant que l'email n'est pas vérifié (§3.1).
+    /// La connexion réussit malgré tout : c'est l'app qui retient
+    /// l'utilisateur sur l'écran de vérification.
     @Default(false) bool enabled,
+
+    /// Vrai si une fiche `userdata` existe déjà — `has_profile` à la
+    /// connexion (§3.2), `profile_summary.has_userdata` sur `/auth/me`
+    /// (§3.3). Évite un aller-retour au démarrage pour savoir s'il faut
+    /// ouvrir le wizard ou le résumé.
+    @JsonKey(name: 'has_profile') @Default(false) bool hasProfile,
+
+    /// Posé par l'administration. Absent du contrat v1 : il reste ici parce
+    /// que l'accueil sait l'afficher dès que le serveur le renverra.
     @Default(false) bool recruted,
     @JsonKey(name: 'is_admin') @Default(false) bool isAdmin,
-
-    /// Évite un aller-retour au démarrage : l'app sait immédiatement s'il faut
-    /// router vers le wizard ou vers le résumé (§7.2).
-    @JsonKey(name: 'has_demande') @Default(false) bool hasDemande,
-    @JsonKey(name: 'demande_id') int? demandeId,
-    @JsonKey(name: 'last_login') DateTime? lastLogin,
+    @JsonKey(name: 'date_inscription') DateTime? dateInscription,
   }) = _Utilisateur;
 
   const Utilisateur._();

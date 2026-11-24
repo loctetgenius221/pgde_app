@@ -22,23 +22,20 @@ enum _Etape {
   service(
     titre: 'Une demande, un dossier',
     texte:
-        'Déposez votre demande d’emploi dans la fonction publique. '
-        'Vous n’en remplissez qu’une seule : elle reste modifiable à tout '
-        'moment, aussi longtemps que vous le souhaitez.',
+        'Vous ne remplissez qu’une seule demande. '
+        'Elle reste modifiable à tout moment.',
   ),
   pieces(
     titre: 'Préparez vos pièces',
     texte:
-        'Munissez-vous de votre CNI ou passeport, de vos diplômes et de '
-        'votre CV. Les documents s’envoient en PDF, Word ou texte, '
-        '2 Mo maximum par fichier.',
+        'Pièce d’identité, photo et diplômes en PDF, 2 Mo maximum. '
+        'Votre CV sera établi à partir de votre dossier.',
   ),
   etapes(
     titre: 'Quatre étapes, à votre rythme',
     texte:
-        'Identité, formations, expériences, vœux d’emploi. Votre saisie est '
-        'conservée sur l’appareil : vous pouvez fermer l’application et '
-        'reprendre plus tard, même sans connexion.',
+        'Identité, formations, expériences, vœux. '
+        'Votre saisie est conservée, même hors connexion.',
   );
 
   const _Etape({required this.titre, required this.texte});

@@ -40,8 +40,13 @@ class MockAuthApi implements AuthApi {
 
   static String? _connecte;
 
+  /// Code accepté par le faux backend, pour la vérification d'email comme
+  /// pour la réinitialisation. En local `MAIL_MAILER=log` n'envoie rien
+  /// (§3.4) : sans code fixe, aucun de ces parcours ne serait démontrable.
+  static const String codeDeDemonstration = '123456';
+
   @override
-  Future<void> register({
+  Future<Utilisateur> register({
     required String firstname,
     required String lastname,
     required String username,
@@ -67,42 +72,60 @@ class MockAuthApi implements AuthApi {
       );
     }
 
+    final Utilisateur cree = Utilisateur(
+      id: DateTime.now().millisecondsSinceEpoch % 1000000,
+      firstname: firstname,
+      lastname: lastname,
+      username: username,
+      numberid: numberid,
+      email: email,
+      // Le serveur force `enabled: false` : le compte naît inactif (§3.1).
+    );
     _comptes[username.toLowerCase()] = _Compte(
       motDePasse: password,
-      utilisateur: Utilisateur(
-        id: DateTime.now().millisecondsSinceEpoch % 1000000,
-        firstname: firstname,
-        lastname: lastname,
-        username: username,
-        numberid: numberid,
-        email: email,
-        // Le serveur force `enabled = 0` : le compte naît inactif (§3.2).
-      ),
+      utilisateur: cree,
     );
+
+    return cree;
   }
 
   @override
   Future<Session> login({
-    required String username,
+    required String identifiant,
     required String password,
   }) async {
     await Future<void>.delayed(_latence);
 
-    final compte = _comptes[username.toLowerCase()];
+    // §3.3 : le même champ accepte l'email ou le nom d'utilisateur.
+    final String cle = identifiant.toLowerCase();
+    final _Compte? compte =
+        _comptes[cle] ??
+        _comptes.values
+            .where((c) => c.utilisateur.email.toLowerCase() == cle)
+            .firstOrNull;
     if (compte == null || compte.motDePasse != password) {
       throw const ApiException(
         'Identifiants incorrects.',
         statusCode: 422,
         fieldErrors: {
-          'username': ["Nom d'utilisateur ou mot de passe incorrect."],
+          'login': ['Identifiant ou mot de passe incorrect.'],
         },
       );
     }
 
-    // Le serveur laisse passer un compte non vérifié (BUG-02) : l'app reçoit
-    // le jeton et `enabled: false`, puis aiguille vers la vérification (§3.3).
+    if (!compte.utilisateur.enabled) {
+      throw const ApiException(
+        'Veuillez activer votre compte avant de vous connecter.',
+        statusCode: 403,
+        code: 'email_not_verified',
+      );
+    }
+
     _connecte = compte.utilisateur.username.toLowerCase();
-    return (token: 'mock|${compte.utilisateur.id}', utilisateur: compte.utilisateur);
+    return (
+      token: 'mock|${compte.utilisateur.id}',
+      utilisateur: compte.utilisateur,
+    );
   }
 
   @override
@@ -122,18 +145,45 @@ class MockAuthApi implements AuthApi {
   }
 
   @override
-  Future<void> resendVerificationEmail() async {
+  Future<void> resendVerificationEmail({required String email}) async {
     await Future<void>.delayed(_latence);
-    // Raccourci de développement assumé : en local `MAIL_MAILER=log`, aucun
-    // mail ne part (§3.4). Le renvoi active donc directement le compte, pour
-    // que le parcours complet soit parcourable sans serveur de mail.
-    final compte = _comptes[_connecte];
-    if (compte != null) {
-      _comptes[_connecte!] = _Compte(
-        motDePasse: compte.motDePasse,
-        utilisateur: compte.utilisateur.copyWith(enabled: true),
+  }
+
+  @override
+  Future<Utilisateur> verifierAvecCode(String code, {String? email}) async {
+    await Future<void>.delayed(_latence);
+    if (code.trim() != codeDeDemonstration) {
+      throw const ApiException(
+        'Code incorrect.',
+        statusCode: 422,
+        fieldErrors: <String, List<String>>{
+          'code': <String>['Ce code est invalide ou a expiré.'],
+        },
       );
     }
+    _Compte? compte = _connecte != null ? _comptes[_connecte] : null;
+    if (compte == null && email != null && email.trim().isNotEmpty) {
+      compte = _comptes.values
+          .where(
+            (c) =>
+                c.utilisateur.email.toLowerCase() == email.trim().toLowerCase(),
+          )
+          .firstOrNull;
+    }
+    compte ??= _comptes.values.where((c) => !c.utilisateur.enabled).firstOrNull;
+    if (compte == null) {
+      throw const ApiException('Aucun compte à activer.', statusCode: 404);
+    }
+    final Utilisateur active = compte.utilisateur.copyWith(enabled: true);
+    final String cle = active.username.toLowerCase();
+    _comptes[cle] = _Compte(motDePasse: compte.motDePasse, utilisateur: active);
+    _connecte = cle;
+    return active;
+  }
+
+  @override
+  Future<void> demanderReinitialisation({required String email}) async {
+    await Future<void>.delayed(_latence);
   }
 }
 

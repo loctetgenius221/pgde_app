@@ -1,8 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Accès réseau : indispensable à l'API. Flutter ne le déclare que dans
+         les manifestes debug et profile ; sans cette ligne, la version
+         release n'atteint jamais le serveur (« Impossible de joindre le
+         serveur »). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Dictée vocale (speech_to_text) : le micro n'est ouvert que pendant
+         une dictée, à la demande du candidat. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <!-- Audit SEC-002 : aucune sauvegarde des données de l'application.
+         `allowBackup` couvre Android 11 et moins, `dataExtractionRules`
+         Android 12 et plus (sauvegarde cloud et transfert d'appareil). -->
     <application
         android:label="Demandes d'emploi"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -40,6 +55,19 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Ouverture des pièces jointes dans le navigateur (url_launcher) :
+             depuis Android 11, l'app doit déclarer les applications qu'elle
+             cherche à ouvrir. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <!-- Dictée vocale : depuis Android 11, l'app doit déclarer qu'elle
+             cherche le service de reconnaissance vocale du système, sinon
+             speech_to_text le croit absent. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

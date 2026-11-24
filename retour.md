@@ -1,0 +1,3 @@
+- Sur le template Mon dossier mettre la section profil juste avant Coordonnées
+- Rendre les champs formulaire trop gris en light tu peut t'inspirer de la page Mon dossier
+- Améliorer le design ux/ui 1er section dans identité pour un meilleur rendu visuel

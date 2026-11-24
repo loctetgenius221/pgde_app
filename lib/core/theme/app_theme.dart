@@ -17,7 +17,18 @@ abstract final class AppTheme {
   static ThemeData _construire(Brightness brightness) {
     final bool clair = brightness == Brightness.light;
     final ColorScheme scheme = _scheme(brightness);
-    final TextTheme texte = _typographie(scheme);
+    // Police appliquée **ici**, et pas seulement via `ThemeData.fontFamily` :
+    // ce dernier ne touche que `textTheme`. Les styles repris tels quels
+    // ailleurs — titre de l'AppBar, libellés des boutons — restaient sinon
+    // en Roboto, la police par défaut d'Android.
+    final TextTheme texte = _typographie(scheme).apply(fontFamily: _police);
+
+    /// Fond de tout ce qui surgit par-dessus la page — feuilles, menus,
+    /// dialogues. Identique à la surface des cartes, pour qu'un élément
+    /// flottant ne se distingue que par son ombre.
+    final Color surfaceFlottante = clair
+        ? AppColors.surfaceClaire
+        : AppColors.surfaceSombre;
 
     return ThemeData(
       useMaterial3: true,
@@ -38,23 +49,33 @@ abstract final class AppTheme {
         titleTextStyle: texte.titleLarge,
       ),
 
-      // Champs **en pilule**, comme les boutons : une seule famille de formes
-      // pour toute l'application. Le contraste vient du fond, pas d'un trait ;
-      // le contour ne s'affirme qu'au focus.
-      //
-      // Un champ multiligne (résumé de CV) devra surcharger `border` avec un
-      // rayon plus faible : une pilule de six lignes de haut serait absurde.
+      // Champs aux formes de la plateforme web — rectangle arrondi à
+      // `Rayon.champ`, trait fin — pour qu'un candidat passant du site à
+      // l'application retrouve les mêmes repères. Fond blanc comme les cartes
+      // de « Mon dossier » ; seul un champ inactif reste grisé. Le contour ne
+      // s'affirme qu'au focus.
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: clair ? AppColors.surfaceClaire : AppColors.surfaceSombre,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: Espace.lg,
-          vertical: Espace.md + 2,
+        fillColor: WidgetStateColor.resolveWith(
+          (etats) => etats.contains(WidgetState.disabled) && clair
+              ? AppColors.champDesactiveClair
+              : (clair ? AppColors.champClair : AppColors.champSombre),
         ),
-        // Laisse respirer les icônes de début et de fin de champ : collées au
-        // bord, elles entreraient dans la courbe de la pilule.
-        prefixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
-        suffixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+        // Hauteur de champ ramenée à 48 dp, la cible tactile de référence
+        // (Material, WCAG) : au-delà, un formulaire de trente champs défile
+        // sans fin sur un téléphone.
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: Espace.md,
+          vertical: Espace.sm + 2,
+        ),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 48,
+        ),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 48,
+        ),
         hintStyle: texte.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         labelStyle: texte.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         floatingLabelStyle: texte.bodySmall?.copyWith(color: scheme.primary),
@@ -74,16 +95,16 @@ abstract final class AppTheme {
 
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
-          shape: const StadiumBorder(),
+          minimumSize: const Size.fromHeight(52),
+          shape: _formeBouton,
           textStyle: texte.labelLarge,
           elevation: 0,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
-          shape: const StadiumBorder(),
+          minimumSize: const Size.fromHeight(52),
+          shape: _formeBouton,
           side: BorderSide(color: scheme.outlineVariant),
           textStyle: texte.labelLarge,
         ),
@@ -101,7 +122,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Rayon.lg),
+          borderRadius: BorderRadius.circular(Rayon.md),
           side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
@@ -112,6 +133,56 @@ abstract final class AppTheme {
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: Espace.md),
       ),
+
+      // --- Surfaces flottantes ---
+      //
+      // Material 3 sert ces surfaces depuis les rôles `surfaceContainer*`,
+      // que `fromSeed` teinte de vert. Une feuille de sélection ou un menu
+      // arrivaient donc en vert pâle, alors que la page qu'ils recouvrent est
+      // blanche : l'élément *surgissant* paraissait moins net que le fond.
+      // On les ramène tous sur la même surface, et on coupe la teinte
+      // d'élévation qui la reverdirait.
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surfaceFlottante,
+        modalBackgroundColor: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: scheme.outlineVariant,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(Rayon.lg)),
+        ),
+      ),
+
+      popupMenuTheme: PopupMenuThemeData(
+        color: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Rayon.md),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll<Color>(surfaceFlottante),
+          surfaceTintColor: const WidgetStatePropertyAll<Color>(
+            Colors.transparent,
+          ),
+        ),
+      ),
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+      ),
+
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: surfaceFlottante,
+        surfaceTintColor: Colors.transparent,
+      ),
+
+      timePickerTheme: TimePickerThemeData(backgroundColor: surfaceFlottante),
 
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant,
@@ -124,7 +195,9 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(Rayon.md),
         ),
-        contentTextStyle: texte.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+        contentTextStyle: texte.bodyMedium?.copyWith(
+          color: scheme.onInverseSurface,
+        ),
       ),
 
       progressIndicatorTheme: ProgressIndicatorThemeData(
@@ -135,9 +208,14 @@ abstract final class AppTheme {
     );
   }
 
+  /// Boutons au même rayon que les champs, comme sur le web.
+  static const RoundedRectangleBorder _formeBouton = RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(Rayon.champ)),
+  );
+
   static OutlineInputBorder _bordure(Color couleur, {double epaisseur = 1}) =>
       OutlineInputBorder(
-        borderRadius: BorderRadius.circular(Rayon.pilule),
+        borderRadius: BorderRadius.circular(Rayon.champ),
         borderSide: BorderSide(color: couleur, width: epaisseur),
       );
 
@@ -156,12 +234,21 @@ abstract final class AppTheme {
       primaryContainer: clair ? AppColors.vertPale : const Color(0xFF00603A),
       onPrimaryContainer: clair ? const Color(0xFF00301A) : AppColors.vertPale,
 
-      // Le jaune n'est jamais une action : il sert de fond d'accent, avec du
-      // texte anthracite dessus — un jaune de marque ne porte pas de blanc.
+      // **Un seul jaune, #FFCC34, et aucune variante.**
+      //
+      // Les quatre rôles « secondary » sont recalés sur la même valeur. Sans
+      // cela, `fromSeed` en dérive des teintes voisines — un jaune pâle pour
+      // `secondaryContainer`, un brun pour `onSecondaryContainer` — que
+      // Material 3 applique ensuite tout seul, notamment au fond des segments
+      // sélectionnés d'un `SegmentedButton`. Deux jaunes cohabitaient donc à
+      // l'écran sans que personne les ait choisis.
+      //
+      // Le texte posé dessus est toujours anthracite : un jaune de marque ne
+      // porte pas de blanc.
       secondary: AppColors.jaune,
       onSecondary: AppColors.anthracite,
-      secondaryContainer: clair ? AppColors.jaunePale : const Color(0xFF574400),
-      onSecondaryContainer: clair ? const Color(0xFF3D2F00) : AppColors.jaunePale,
+      secondaryContainer: AppColors.jaune,
+      onSecondaryContainer: AppColors.anthracite,
 
       error: clair ? AppColors.rouge : const Color(0xFFFF8A8C),
       onError: clair ? Colors.white : const Color(0xFF5C0004),

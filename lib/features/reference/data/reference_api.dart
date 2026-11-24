@@ -4,11 +4,14 @@ import '../../../core/config/env.dart';
 import '../../../core/network/api_client.dart';
 import '../domain/referentiel.dart';
 import 'reference_mock_api.dart';
+import 'referentiel_mapper.dart';
 
-/// Nomenclatures, §7.3.
+/// Nomenclatures — contrat §4.
 ///
-/// Un seul appel plutôt que sept : le référentiel est volumineux mais quasi
-/// statique, il se charge d'un bloc et se met en cache (§5.6).
+/// `GET /reference/all` plutôt que les sept routes granulaires : le
+/// référentiel est volumineux mais quasi statique, il se charge d'un bloc et
+/// se met en cache. Le contrat recommande lui-même cet appel unique au
+/// démarrage.
 abstract interface class ReferenceApi {
   Future<Referentiel> bootstrap();
 }
@@ -20,7 +23,7 @@ class HttpReferenceApi implements ReferenceApi {
 
   @override
   Future<Referentiel> bootstrap() async =>
-      Referentiel.fromJson(await _client.get('/ref/bootstrap') as Json);
+      ReferentielMapper.depuisApi(await _client.get('/reference/all') as Json);
 }
 
 final referenceApiProvider = Provider<ReferenceApi>(

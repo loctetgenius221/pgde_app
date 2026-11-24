@@ -14,13 +14,12 @@ _Utilisateur _$UtilisateurFromJson(Map<String, dynamic> json) => _Utilisateur(
   numberid: json['numberid'] as String,
   email: json['email'] as String,
   enabled: json['enabled'] as bool? ?? false,
+  hasProfile: json['has_profile'] as bool? ?? false,
   recruted: json['recruted'] as bool? ?? false,
   isAdmin: json['is_admin'] as bool? ?? false,
-  hasDemande: json['has_demande'] as bool? ?? false,
-  demandeId: (json['demande_id'] as num?)?.toInt(),
-  lastLogin: json['last_login'] == null
+  dateInscription: json['date_inscription'] == null
       ? null
-      : DateTime.parse(json['last_login'] as String),
+      : DateTime.parse(json['date_inscription'] as String),
 );
 
 Map<String, dynamic> _$UtilisateurToJson(_Utilisateur instance) =>
@@ -32,9 +31,8 @@ Map<String, dynamic> _$UtilisateurToJson(_Utilisateur instance) =>
       'numberid': instance.numberid,
       'email': instance.email,
       'enabled': instance.enabled,
+      'has_profile': instance.hasProfile,
       'recruted': instance.recruted,
       'is_admin': instance.isAdmin,
-      'has_demande': instance.hasDemande,
-      'demande_id': instance.demandeId,
-      'last_login': instance.lastLogin?.toIso8601String(),
+      'date_inscription': instance.dateInscription?.toIso8601String(),
     };

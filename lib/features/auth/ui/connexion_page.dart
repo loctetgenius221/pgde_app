@@ -10,7 +10,9 @@ import '../../../core/ui/responsive.dart';
 import '../application/auth_controller.dart';
 
 class ConnexionPage extends ConsumerStatefulWidget {
-  const ConnexionPage({super.key});
+  const ConnexionPage({super.key, this.identifiantInitial});
+
+  final String? identifiantInitial;
 
   @override
   ConsumerState<ConnexionPage> createState() => _ConnexionPageState();
@@ -19,13 +21,29 @@ class ConnexionPage extends ConsumerStatefulWidget {
 class _ConnexionPageState extends ConsumerState<ConnexionPage>
     with FormSubmission {
   final _formKey = GlobalKey<FormState>();
-  final _username = TextEditingController();
+  late final TextEditingController _identifiant;
   final _password = TextEditingController();
   bool _motDePasseVisible = false;
 
   @override
+  void initState() {
+    super.initState();
+    _identifiant = TextEditingController(text: widget.identifiantInitial ?? '');
+  }
+
+  @override
+  void didUpdateWidget(ConnexionPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.identifiantInitial != null &&
+        widget.identifiantInitial != oldWidget.identifiantInitial &&
+        _identifiant.text.isEmpty) {
+      _identifiant.text = widget.identifiantInitial!;
+    }
+  }
+
+  @override
   void dispose() {
-    _username.dispose();
+    _identifiant.dispose();
     _password.dispose();
     super.dispose();
   }
@@ -37,7 +55,10 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
     await soumettre(
       () => ref
           .read(authControllerProvider.notifier)
-          .connexion(username: _username.text.trim(), password: _password.text),
+          .connexion(
+            identifiant: _identifiant.text.trim(),
+            password: _password.text,
+          ),
     );
   }
 
@@ -70,38 +91,49 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                       ),
                     ),
                     const SizedBox(height: Espace.lg),
+
                     Text(
-                      'Bon retour',
+                      'Votre espace candidat',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.displaySmall,
-                    ),
-                    const SizedBox(height: Espace.xs),
-                    Text(
-                      'Connectez-vous pour déposer ou compléter votre demande '
-                      "d'emploi.",
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      style: theme.textTheme.headlineSmall,
                     ),
                     const SizedBox(height: Espace.xl),
 
                     BandeauErreur(erreurGlobale),
 
+                    if (erreur?.isEmailNotVerified == true) ...<Widget>[
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.mail_outline, size: 20),
+                        label: const Text(
+                          'Activer mon compte / Renvoyer le lien',
+                        ),
+                        onPressed: () {
+                          final String emailOuLogin = _identifiant.text.trim();
+                          final String url = emailOuLogin.contains('@')
+                              ? '${Routes.verificationEmail}?email=${Uri.encodeComponent(emailOuLogin)}'
+                              : Routes.verificationEmail;
+                          context.push(url);
+                        },
+                      ),
+                      const SizedBox(height: Espace.md),
+                    ],
+
                     TextFormField(
-                      controller: _username,
-                      // §3.3 : l'identifiant de connexion est le nom
-                      // d'utilisateur, jamais l'email.
+                      controller: _identifiant,
+                      // §3.2 : le serveur accepte l'email **ou** le nom
+                      // d'utilisateur sur le même champ. Imposer l'un des
+                      // deux ferait échouer la moitié des candidats sur une
+                      // règle qui n'existe pas.
                       decoration: InputDecoration(
-                        labelText: "Nom d'utilisateur",
+                        labelText: 'Email ou nom d’utilisateur',
                         prefixIcon: const PrefixeChamp(Icones.identifiant),
-                        errorText: erreurDuChamp('username'),
+                        errorText: erreurDuChamp('login'),
                       ),
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
                       autofillHints: const <String>[AutofillHints.username],
                       validator: (v) => (v == null || v.trim().isEmpty)
-                          ? "Saisissez votre nom d'utilisateur"
+                          ? 'Saisissez votre identifiant'
                           : null,
                     ),
                     const SizedBox(height: Espace.sm),
@@ -123,8 +155,10 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                               _motDePasseVisible
                                   ? Icones.masquer
                                   : Icones.afficher,
-                              taille: 20,
-                              couleur: theme.colorScheme.onSurfaceVariant,
+                              taille: StyleIcone.suffixe,
+                              epaisseur: StyleIcone.traitChamp,
+                              couleur: theme.colorScheme.onSurfaceVariant
+                                  .withValues(alpha: StyleIcone.opaciteChamp),
                             ),
                             onPressed: () => setState(
                               () => _motDePasseVisible = !_motDePasseVisible,
@@ -138,7 +172,16 @@ class _ConnexionPageState extends ConsumerState<ConnexionPage>
                           ? 'Saisissez votre mot de passe'
                           : null,
                     ),
-                    const SizedBox(height: Espace.lg),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: envoiEnCours
+                            ? null
+                            : () => context.push(Routes.motDePasseOublie),
+                        child: const Text('Mot de passe oublié ?'),
+                      ),
+                    ),
+                    const SizedBox(height: Espace.xs),
 
                     FilledButton(
                       onPressed: envoiEnCours ? null : _connecter,

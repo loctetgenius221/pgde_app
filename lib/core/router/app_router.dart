@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/assistant/ui/assistant_page.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/ui/connexion_page.dart';
 import '../../features/auth/ui/inscription_page.dart';
+import '../../features/auth/ui/mot_de_passe_oublie_page.dart';
 import '../../features/auth/ui/verification_email_page.dart';
 import '../../features/demande/domain/wizard.dart';
 import '../../features/demande/ui/accueil_page.dart';
+import '../../features/demande/ui/resume_page.dart';
 import '../../features/demande/ui/wizard_page.dart';
 import '../../features/onboarding/application/onboarding_controller.dart';
 import '../../features/onboarding/ui/onboarding_page.dart';
@@ -19,16 +22,24 @@ abstract final class Routes {
   static const String onboarding = '/onboarding';
   static const String connexion = '/connexion';
   static const String inscription = '/inscription';
+  static const String motDePasseOublie = '/mot-de-passe-oublie';
   static const String verificationEmail = '/verification-email';
   static const String accueil = '/';
   static const String wizard = '/demande';
+  static const String resume = '/dossier';
+  static const String assistant = '/assistant';
 
   /// Ouvre le wizard directement sur une étape.
   static String wizardEtape(EtapeWizard etape) =>
       '$wizard?etape=${etape.numero}';
 }
 
-const Set<String> _routesPubliques = {Routes.connexion, Routes.inscription};
+const Set<String> _routesPubliques = <String>{
+  Routes.connexion,
+  Routes.inscription,
+  Routes.motDePasseOublie,
+  Routes.verificationEmail,
+};
 
 final routerProvider = Provider<GoRouter>((ref) {
   // `GoRouter` n'écoute pas Riverpod : on lui expose un `Listenable` que l'on
@@ -86,13 +97,45 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ferait passer le splash pour un écran dont on revient.
       _fondu(Routes.demarrage, const SplashPage()),
       _fondu(Routes.onboarding, const OnboardingPage()),
-      _fondu(Routes.connexion, const ConnexionPage()),
+      GoRoute(
+        path: Routes.connexion,
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          transitionDuration: Duree.moyenne,
+          child: ConnexionPage(
+            identifiantInitial:
+                state.uri.queryParameters['login'] ??
+                state.uri.queryParameters['email'],
+          ),
+          transitionsBuilder: (_, animation, _, enfant) =>
+              FadeTransition(opacity: animation, child: enfant),
+        ),
+      ),
       GoRoute(
         path: Routes.inscription,
         builder: (_, _) => const InscriptionPage(),
       ),
-      _fondu(Routes.verificationEmail, const VerificationEmailPage()),
+      GoRoute(
+        path: Routes.motDePasseOublie,
+        builder: (_, _) => const MotDePasseOubliePage(),
+      ),
+      GoRoute(
+        path: Routes.verificationEmail,
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          transitionDuration: Duree.moyenne,
+          child: VerificationEmailPage(
+            email: state.uri.queryParameters['email'],
+          ),
+          transitionsBuilder: (_, animation, _, enfant) =>
+              FadeTransition(opacity: animation, child: enfant),
+        ),
+      ),
       _fondu(Routes.accueil, const AccueilPage()),
+      GoRoute(path: Routes.resume, builder: (_, _) => const ResumePage()),
+      // Pas de fondu ici : l'avatar traverse la navigation par `Hero`, et un
+      // fondu superposé brouillerait la continuité qu'il établit.
+      GoRoute(path: Routes.assistant, builder: (_, _) => const AssistantPage()),
       GoRoute(
         path: Routes.wizard,
         builder: (_, state) => WizardPage(

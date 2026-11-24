@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,8 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pgde_app/app.dart';
 import 'package:pgde_app/core/network/api_exception.dart';
 import 'package:pgde_app/core/storage/key_value_store.dart';
+import 'package:pgde_app/features/auth/data/auth_api.dart';
+import 'package:pgde_app/features/auth/data/auth_mock_api.dart';
+import 'package:pgde_app/features/auth/domain/utilisateur.dart';
 import 'package:pgde_app/features/demande/data/demande_api.dart';
 import 'package:pgde_app/features/demande/domain/demande.dart';
+import 'package:pgde_app/features/reference/data/reference_api.dart';
+import 'package:pgde_app/features/reference/data/reference_mock_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Faux dossier pilotable, pour éprouver le wizard sans dépendre de l'état
@@ -16,29 +23,95 @@ class _FauxDemandeApi implements DemandeApi {
 
   Demande? dossier;
   ApiException? erreurAEnvoyer;
+
+  /// Les quatre étapes enregistrées, dans l'ordre où elles sont parties.
+  final List<String> etapesEnvoyees = <String>[];
+
+  /// Dernier dossier soumis, toutes étapes confondues.
   Demande? dernierEnvoi;
+
+  /// Rangs de formation pour lesquels un justificatif a été déposé (§6.4).
+  final List<int> diplomesDeposes = <int>[];
 
   @override
   Future<Demande?> mien() async => dossier;
 
   @override
-  Future<Demande> creer(Demande demande) async => _envoyer(demande, id: 1);
+  Future<void> enregistrerIdentite(Demande d) => _envoyer(d, 'identity');
 
   @override
-  Future<Demande> mettreAJour(Demande demande) async =>
-      _envoyer(demande, id: demande.id);
+  Future<void> enregistrerFormations(Demande d) => _envoyer(d, 'formations');
 
-  Demande _envoyer(Demande demande, {int? id}) {
+  @override
+  Future<void> enregistrerExperiences(Demande d) => _envoyer(d, 'experiences');
+
+  @override
+  Future<void> enregistrerVoeux(Demande d) => _envoyer(d, 'target-jobs');
+
+  Future<void> _envoyer(Demande demande, String etape) async {
     dernierEnvoi = demande;
     final ApiException? erreur = erreurAEnvoyer;
     if (erreur != null) throw erreur;
-    return dossier = demande.copyWith(id: id);
+    etapesEnvoyees.add(etape);
+    dossier = demande.copyWith(deposee: true);
   }
+
+  // Les pièces ne sont pas l'objet de ces tests : on note ce qui est
+  // demandé, sans toucher au dossier.
+  final List<File> photosDeposees = <File>[];
+
+  @override
+  Future<FichierJoint> deposerPhoto(File fichier) async {
+    photosDeposees.add(fichier);
+    return const FichierJoint(chemin: 'p.jpg', url: 'http://x/p.jpg');
+  }
+
+  @override
+  Future<FichierJoint> deposerDiplome(File fichier) async {
+    diplomesDeposes.add(diplomesDeposes.length);
+    return const FichierJoint(chemin: 'd.pdf', url: 'http://x/d.pdf');
+  }
+
+  @override
+  Future<void> supprimerCv(String filePath) async {}
+
+  @override
+  Future<File> telecharger(FichierJoint piece) async => File(piece.chemin);
+}
+
+/// Compte de démonstration dont `has_profile` suit le scénario.
+///
+/// Le contrôleur du dossier ne lit `GET /candidat/profile` que si le compte
+/// a déjà un profil : sans cela, un dossier « déjà déposé » ne serait jamais
+/// chargé et l'accueil resterait sur « Commencer ma demande ».
+class _AuthDeDemo extends MockAuthApi {
+  _AuthDeDemo({required this.aUnProfil});
+
+  final bool aUnProfil;
+
+  @override
+  Future<Session> login({
+    required String identifiant,
+    required String password,
+  }) async {
+    final Session s = await super.login(
+      identifiant: identifiant,
+      password: password,
+    );
+    return (
+      token: s.token,
+      utilisateur: s.utilisateur.copyWith(hasProfile: aUnProfil),
+    );
+  }
+
+  @override
+  Future<Utilisateur> me() async =>
+      (await super.me()).copyWith(hasProfile: aUnProfil);
 }
 
 /// Dossier minimal accepté par le serveur (§4, récapitulatif).
 final Demande _dossierValide = Demande(
-  id: 42,
+  deposee: true,
   dateNaissance: DateTime(1998, 4, 12),
   lieuNaissance: 'Dakar',
   lieuResidence: 'Pikine',
@@ -59,6 +132,15 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
     ..devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
+  // L'accueil porte l'avatar de l'assistant, dont l'animation de repos
+  // tourne sans fin : `pumpAndSettle` attendrait indéfiniment une scène qui
+  // ne se stabilise jamais. On demande donc le mouvement réduit — ce qui
+  // éprouve au passage le chemin que suit un utilisateur ayant désactivé les
+  // animations sur son appareil.
+  tester.platformDispatcher.accessibilityFeaturesTestValue =
+      const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+
   SharedPreferences.setMockInitialValues(<String, Object>{
     'onboarding_vu': true,
   });
@@ -70,6 +152,10 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        authApiProvider.overrideWithValue(
+          _AuthDeDemo(aUnProfil: dossier != null),
+        ),
+        referenceApiProvider.overrideWithValue(MockReferenceApi()),
         demandeApiProvider.overrideWithValue(api),
       ],
       child: const PgdeApp(),
@@ -83,9 +169,19 @@ Future<_FauxDemandeApi> _ouvrirLeWizard(
   await tester.tap(find.text('Se connecter'));
   await tester.pumpAndSettle();
 
-  // Depuis l'accueil, on entre dans le dossier. Le libellé du bouton dépend
-  // de l'état du dossier : on vise le bouton, pas son texte.
-  await tester.tap(find.byType(FilledButton).first);
+  // Depuis l'accueil, on entre dans le formulaire. Un dossier déjà déposé
+  // ouvre d'abord le résumé : c'est « Modifier » qui mène au wizard.
+  final Finder entree = dossier == null
+      ? find.byType(FilledButton).first
+      : find.text('Modifier mon dossier');
+  // L'accueil est une liste paresseuse : la carte du dossier peut se trouver
+  // sous la ligne de flottaison, et n'être alors pas encore construite.
+  await tester.scrollUntilVisible(
+    entree,
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.tap(entree);
   await tester.pumpAndSettle();
 
   return api;
@@ -98,23 +194,49 @@ void main() {
     await _ouvrirLeWizard(tester);
 
     expect(find.text('Identité et résidence'), findsOneWidget);
-    expect(find.text('Date de naissance'), findsWidgets);
+    // Le libellé d'un champ obligatoire est un `Text.rich` (astérisque) :
+    // `find.text` ne le verrait pas.
+    expect(find.textContaining('Date de naissance'), findsWidgets);
 
-    await tester.tap(find.text('Continuer'));
+    await tester.tap(find.text('Suivant'));
     await tester.pumpAndSettle();
     expect(find.text('Formations et documents'), findsOneWidget);
 
-    await tester.tap(find.text('Continuer'));
+    await tester.tap(find.text('Suivant'));
     await tester.pumpAndSettle();
     expect(find.text('Expériences professionnelles'), findsOneWidget);
-    expect(find.text('Avez-vous déjà travaillé ?'), findsOneWidget);
+    expect(
+      find.text('Avez-vous déjà une expérience professionnelle ?'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Continuer'));
+    await tester.tap(find.text('Suivant'));
     await tester.pumpAndSettle();
     expect(find.text('Vœux d\'emploi'), findsOneWidget);
     // Dernière étape : le bouton change de rôle.
     expect(find.text('Enregistrer'), findsOneWidget);
-    expect(find.text('Continuer'), findsNothing);
+    expect(find.text('Suivant'), findsNothing);
+  });
+
+  testWidgets('répondre « oui » au handicap ouvre le choix du type', (
+    tester,
+  ) async {
+    await _ouvrirLeWizard(tester);
+
+    // La question est en bas de l'étape 1.
+    await tester.scrollUntilVisible(
+      find.text('Êtes-vous en situation de handicap ?'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Type de handicap'), findsNothing);
+
+    await tester.tap(find.text('Oui'));
+    await tester.pumpAndSettle();
+
+    // Le geste doit avoir un effet **avant** qu'un type soit choisi : c'est
+    // exactement ce qui ne marchait pas.
+    expect(find.text('Type de handicap'), findsOneWidget);
   });
 
   testWidgets('enregistrer un dossier vide renvoie sur l’étape fautive', (
@@ -123,7 +245,7 @@ void main() {
     final api = await _ouvrirLeWizard(tester);
 
     for (int i = 0; i < 3; i++) {
-      await tester.tap(find.text('Continuer'));
+      await tester.tap(find.text('Suivant'));
       await tester.pumpAndSettle();
     }
     await tester.tap(find.text('Enregistrer'));
@@ -132,10 +254,7 @@ void main() {
     // Rien n'est parti au serveur, et on est revenu à l'étape 1.
     expect(api.dernierEnvoi, isNull);
     expect(find.text('Identité et résidence'), findsOneWidget);
-    expect(
-      find.textContaining('Complétez l’étape'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Complétez l’étape'), findsOneWidget);
   });
 
   testWidgets('un 422 renvoie sur l’étape qui porte le champ (§8.7)', (
@@ -152,7 +271,7 @@ void main() {
 
     // Le dossier chargé est complet : on peut enregistrer depuis l'étape 1.
     for (int i = 0; i < 3; i++) {
-      await tester.tap(find.text('Continuer'));
+      await tester.tap(find.text('Suivant'));
       await tester.pumpAndSettle();
     }
     await tester.tap(find.text('Enregistrer'));
@@ -164,13 +283,13 @@ void main() {
     expect(find.text('Le résumé est trop long.'), findsOneWidget);
   });
 
-  testWidgets('un dossier complet part en entier et ferme le wizard', (
+  testWidgets('un dossier complet part en entier et mène au récapitulatif', (
     tester,
   ) async {
     final api = await _ouvrirLeWizard(tester, dossier: _dossierValide);
 
     for (int i = 0; i < 3; i++) {
-      await tester.tap(find.text('Continuer'));
+      await tester.tap(find.text('Suivant'));
       await tester.pumpAndSettle();
     }
     await tester.tap(find.text('Enregistrer'));
@@ -180,7 +299,8 @@ void main() {
     expect(envoye, isNotNull);
     expect(envoye!.emploi1Id, 12);
     expect(envoye.emploi2Id, 45);
-    // Retour à l'accueil après l'enregistrement.
-    expect(find.text('Les étapes de votre dossier'), findsOneWidget);
+    // Comme sur le web : l'enregistrement mène au récapitulatif.
+    expect(find.text('Mon dossier'), findsOneWidget);
+    expect(find.text('Coordonnées'), findsOneWidget);
   });
 }

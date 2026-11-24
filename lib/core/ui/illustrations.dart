@@ -126,7 +126,8 @@ void _apparaitre(
   canvas
     ..saveLayer(
       Offset.zero & size,
-      Paint()..color = Colors.white.withValues(alpha: avancement.clamp(0.0, 1.0)),
+      Paint()
+        ..color = Colors.white.withValues(alpha: avancement.clamp(0.0, 1.0)),
     )
     ..translate(0, remontee * (1 - avancement));
   dessin();
@@ -152,10 +153,7 @@ void _texte(
     ),
     textDirection: TextDirection.ltr,
   )..layout();
-  peintre.paint(
-    canvas,
-    centre - Offset(peintre.width / 2, peintre.height / 2),
-  );
+  peintre.paint(canvas, centre - Offset(peintre.width / 2, peintre.height / 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -471,8 +469,12 @@ class _PeintreEtapes extends CustomPainter {
 
     for (int i = 0; i < _total; i++) {
       // Chaque étape apparaît quand le fil l'atteint.
-      final double vNoeud = _phase(p, 0.12 + i * 0.16, 0.34 + i * 0.16,
-          Curves.easeOutBack);
+      final double vNoeud = _phase(
+        p,
+        0.12 + i * 0.16,
+        0.34 + i * 0.16,
+        Curves.easeOutBack,
+      );
       if (vNoeud <= 0) continue;
 
       final Offset centre = Offset(xDebut + pas * i, y);

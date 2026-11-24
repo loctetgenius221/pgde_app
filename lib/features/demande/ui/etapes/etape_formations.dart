@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_dimens.dart';
 import '../../../../core/ui/champs.dart';
 import '../../../../core/ui/icone.dart';
 import '../../../../core/ui/liste_dynamique.dart';
+import '../../../../core/ui/responsive.dart';
 import '../../../reference/domain/referentiel.dart';
+import '../../data/selecteur_fichiers.dart';
 import '../../domain/demande.dart';
 import 'etape_wizard.dart';
+import 'pieces_jointes.dart';
 
 /// Étape 2 — formations (§4).
 ///
@@ -16,7 +21,11 @@ import 'etape_wizard.dart';
 /// occupe déjà 183 (bloqueur B3). Tant qu'elle n'est pas migrée, une deuxième
 /// formation fera échouer l'enregistrement avec une erreur SQL 1406 : on
 /// prévient ici plutôt que de laisser le candidat perdre sa saisie.
-class EtapeFormations extends StatelessWidget {
+///
+/// Chaque formation porte **son** justificatif, dans sa propre carte : le
+/// rattachement se fait au moment où le candidat vient de saisir le diplôme,
+/// et non après coup depuis une pile de fichiers anonymes.
+class EtapeFormations extends ConsumerWidget {
   const EtapeFormations({
     required this.demande,
     required this.referentiel,
@@ -31,27 +40,32 @@ class EtapeFormations extends StatelessWidget {
   final Modification modifier;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final List<Academic> niveaux = referentiel.academicsOrdonnes;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const TitreSection(
-          'Vos formations',
-          aide: 'Commencez par la plus élevée. Vous pouvez en ajouter '
-              'autant que nécessaire.',
+        const IntroEtape(
+          'Ajoutez vos diplômes, du plus récent au plus ancien. Le '
+          'justificatif est facultatif.',
         ),
 
         ListeDynamique<Formation>(
           elements: demande.formations,
-          libelleAjout: 'Ajouter une formation',
-          messageVide: 'Aucune formation enregistrée pour le moment.',
+          icone: Icones.etapeFormations,
+          libelleAjout: demande.formations.isEmpty
+              ? 'Ajouter un diplôme'
+              : 'Ajouter un autre diplôme',
+          messageVide: 'Aucun diplôme pour l’instant.',
           nouveau: () => const Formation(academicId: 0),
-          titre: (i) => 'Formation ${i + 1}',
+          titre: (i) => 'Diplôme ${i + 1}',
           onChange: (liste) => modifier((d) => d.copyWith(formations: liste)),
-          contenu: (formation, remplacer) => _ChampsFormation(
+          onRetirer: (rang) => _retirerLeJustificatif(ref, rang),
+          contenu: (rang, formation, remplacer) => _ChampsFormation(
+            rang: rang,
             formation: formation,
+            justificatif: demande.justificatifDe(rang),
             niveaux: niveaux,
             erreurs: erreurs,
             onChange: remplacer,
@@ -65,30 +79,42 @@ class EtapeFormations extends StatelessWidget {
       ],
     );
   }
+
+  /// Une formation qui s'en va emporte son justificatif.
+  ///
+  /// Rien à supprimer côté serveur : le contrat §6 n'expose pas de route pour
+  /// cela, et le prochain `PUT /candidat/formations` n'enverra tout
+  /// simplement plus cette ligne ni son `diplome_file`.
+  void _retirerLeJustificatif(WidgetRef ref, int rang) =>
+      ref.read(piecesEnAttenteProvider.notifier).retirerFormation(rang);
 }
 
 class _ChampsFormation extends StatelessWidget {
   const _ChampsFormation({
+    required this.rang,
     required this.formation,
+    required this.justificatif,
     required this.niveaux,
     required this.erreurs,
     required this.onChange,
   });
 
+  final int rang;
   final Formation formation;
+  final FichierJoint? justificatif;
   final List<Academic> niveaux;
   final ApiException? erreurs;
   final ValueChanged<Formation> onChange;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
+  // Deux colonnes dès que la carte en a la place, comme sur le web.
+  Widget build(BuildContext context) => GrilleChamps(
     children: <Widget>[
       ChampSelection<Academic>(
-        libelle: 'Niveau d’études',
-        icone: Icones.niveauEtudes,
+        libelle: 'Niveau',
         valeur: _niveau,
         elements: niveaux,
+        indication: 'Choisir un niveau',
         // §5.2 : l'ordre est imposé par l'app, jamais par l'id.
         etiquette: (a) =>
             a.id == Academic.sansDiplomeId ? 'Sans diplôme' : a.libelle,
@@ -98,38 +124,43 @@ class _ChampsFormation extends StatelessWidget {
       // §8.9 : « sans diplôme » masque intitulé, année, spécialité et
       // établissement — les demander n'aurait aucun sens.
       if (!formation.sansDiplome && formation.academicId != 0) ...<Widget>[
-        const SizedBox(height: Espace.sm),
+        // Ordre et exemples repris du formulaire web.
         ChampTexte(
           libelle: 'Intitulé du diplôme',
-          icone: Icones.diplome,
+          indication: 'ex : Licence en comptabilité',
           valeur: formation.diplome,
           onChange: (v) => onChange(formation.copyWith(diplome: v)),
         ),
-        const SizedBox(height: Espace.sm),
-        ChampTexte(
-          libelle: 'Spécialité',
-          icone: Icones.diplome,
-          valeur: formation.specialite,
-          onChange: (v) => onChange(formation.copyWith(specialite: v)),
-        ),
-        const SizedBox(height: Espace.sm),
         ChampTexte(
           libelle: 'Établissement',
-          icone: Icones.etablissement,
+          indication: 'ex : Université Cheikh Anta Diop',
           valeur: formation.etablissement,
           onChange: (v) => onChange(formation.copyWith(etablissement: v)),
         ),
-        const SizedBox(height: Espace.sm),
+        ChampTexte(
+          libelle: 'Spécialité',
+          indication: 'ex : Finance',
+          valeur: formation.specialite,
+          onChange: (v) => onChange(formation.copyWith(specialite: v)),
+        ),
         ChampTexte(
           libelle: 'Année d’obtention',
-          icone: Icones.annee,
+          indication: 'ex : 2024',
           valeur: formation.anneeDiplome?.toString() ?? '',
           clavier: TextInputType.number,
-          formatteurs: Formats.chiffres,
-          longueurMax: 4,
+          formatteurs: <TextInputFormatter>[
+            ...Formats.chiffres,
+            // Quatre chiffres, sans le compteur « 0/4 » qu'afficherait
+            // `longueurMax`.
+            LengthLimitingTextInputFormatter(4),
+          ],
           onChange: (v) =>
               onChange(formation.copyWith(anneeDiplome: int.tryParse(v))),
         ),
+
+        // Rien à prouver sans diplôme (§8.9) : le justificatif suit donc
+        // exactement la même condition que les champs qu'il vient appuyer.
+        JustificatifFormation(rang: rang, depose: justificatif),
       ],
     ],
   );
@@ -164,10 +195,8 @@ class _AvertissementFormationsMultiples extends StatelessWidget {
           const SizedBox(width: Espace.xs),
           Expanded(
             child: Text(
-              'Le serveur ne sait pas encore enregistrer plusieurs formations. '
-              'Votre saisie reste conservée sur l’appareil, mais '
-              'l’enregistrement peut échouer tant que la correction n’est pas '
-              'déployée.',
+              'Le serveur n’accepte qu’une formation pour l’instant : '
+              'l’enregistrement peut échouer.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSecondaryContainer,
               ),

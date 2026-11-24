@@ -60,9 +60,9 @@ void main() {
     await tester.tap(find.text('Commencer'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Bon retour'), findsOneWidget);
-    expect(find.text("Nom d'utilisateur"), findsOneWidget);
-    // §3.3 : on ne se connecte jamais avec l'email.
+    expect(find.text('Votre espace candidat'), findsOneWidget);
+    expect(find.text('Email ou nom d’utilisateur'), findsOneWidget);
+    // §3.3 : l'API accepte l'email ou le nom d'utilisateur.
     expect(find.text('Adresse email'), findsNothing);
   });
 
@@ -72,7 +72,7 @@ void main() {
     await _lancer(tester, prefs: <String, Object>{'onboarding_vu': true});
     await tester.pumpAndSettle();
 
-    expect(find.text('Bon retour'), findsOneWidget);
+    expect(find.text('Votre espace candidat'), findsOneWidget);
     expect(find.text('Une demande, un dossier'), findsNothing);
   });
 
@@ -89,14 +89,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // Sans plafond, le champ s'étirerait sur toute la largeur de l'écran.
-    final Size champ = tester.getSize(
-      find.byType(TextFormField).first,
-    );
+    final Size champ = tester.getSize(find.byType(TextFormField).first);
     expect(champ.width, lessThanOrEqualTo(LargeurMax.formulaire));
     expect(champ.width, greaterThan(300));
   });
 
-  testWidgets('sur un écran de téléphone, le splash tient sans rognage', (
+  testWidgets('sur un téléphone, le sigle vient s’aligner avec le logo', (
     tester,
   ) async {
     // Petit téléphone courant : 360 × 800 en pixels logiques.
@@ -106,24 +104,38 @@ void main() {
     addTearDown(tester.view.reset);
 
     await _lancer(tester);
-    // On s'arrête pendant le splash, avant que le routeur ne bascule.
-    await tester.pump(const Duration(milliseconds: 900));
 
-    const String titre = "Plateforme de Gestion des Demandes d'emploi";
-    const String sousTitre =
-        'Ministère de la Fonction publique, du travail '
-        'et de la réforme du service public';
+    // Le logo se pose seul : le sigle n'est pas encore entré.
+    await tester.pump(const Duration(milliseconds: 250));
+    final Rect logoSeul = tester.getRect(find.byType(Image));
+    expect(
+      logoSeul.center.dx,
+      closeTo(180, 12),
+      reason: 'le logo commence centré, avant l’arrivée du sigle',
+    );
 
-    expect(find.text(titre), findsOneWidget);
-    expect(find.text(sousTitre), findsOneWidget);
-
-    // Le bloc complet — logo, titre, sous-titre — doit rester dans l'écran.
+    // Une fois l'assemblage joué, les deux partagent la même ligne.
+    await tester.pump(const Duration(milliseconds: 1550));
     final Rect logo = tester.getRect(find.byType(Image));
-    final Rect bas = tester.getRect(find.text(sousTitre));
-    expect(logo.top, greaterThanOrEqualTo(0));
-    expect(bas.bottom, lessThanOrEqualTo(800));
-    // Et ne pas déborder latéralement.
-    expect(bas.left, greaterThanOrEqualTo(0));
-    expect(bas.right, lessThanOrEqualTo(360));
+    final Rect sigle = tester.getRect(find.text('PGDE'));
+
+    expect(
+      sigle.left,
+      greaterThan(logo.right - 1),
+      reason: 'le sigle est à droite du logo',
+    );
+    // Même ligne : les deux rectangles se chevauchent verticalement.
+    expect(logo.top, lessThan(sigle.bottom));
+    expect(sigle.top, lessThan(logo.bottom));
+    // Et le logo a bien cédé sa place centrale.
+    expect(logo.center.dx, lessThan(logoSeul.center.dx - 10));
+
+    // Le pied de page tient dans l'écran, sans rognage latéral.
+    final Rect ministere = tester.getRect(
+      find.textContaining('Ministère de la Fonction publique'),
+    );
+    expect(ministere.bottom, lessThanOrEqualTo(800));
+    expect(ministere.left, greaterThanOrEqualTo(0));
+    expect(ministere.right, lessThanOrEqualTo(360));
   });
 }

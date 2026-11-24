@@ -39,32 +39,44 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     }
   }
 
+  /// [identifiant] vaut l'email **ou** le nom d'utilisateur : le serveur
+  /// accepte les deux sur le même champ (contrat §3.2).
   Future<void> connexion({
-    required String username,
+    required String identifiant,
     required String password,
   }) async {
     final session = await ref
         .read(authApiProvider)
-        .login(username: username, password: password);
-    await ref.read(tokenStoreProvider).write(session.token);
-    state = AsyncData(session.utilisateur);
+        .login(identifiant: identifiant, password: password);
+    await _ouvrir(session);
   }
 
-  Future<void> inscription({
+  /// L'inscription crée le compte sans émettre de jeton (§3.1) : le candidat
+  /// doit activer son compte via l'e-mail reçu avant de se connecter.
+  Future<Utilisateur> inscription({
     required String firstname,
     required String lastname,
     required String username,
     required String numberid,
     required String email,
     required String password,
-  }) => ref.read(authApiProvider).register(
-    firstname: firstname,
-    lastname: lastname,
-    username: username,
-    numberid: numberid,
-    email: email,
-    password: password,
-  );
+  }) async {
+    return ref
+        .read(authApiProvider)
+        .register(
+          firstname: firstname,
+          lastname: lastname,
+          username: username,
+          numberid: numberid,
+          email: email,
+          password: password,
+        );
+  }
+
+  Future<void> _ouvrir(Session session) async {
+    await ref.read(tokenStoreProvider).write(session.token);
+    state = AsyncData(session.utilisateur);
+  }
 
   Future<void> deconnexion() async {
     try {
@@ -77,8 +89,29 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
     state = const AsyncData(null);
   }
 
-  Future<void> renvoyerEmailDeVerification() =>
-      ref.read(authApiProvider).resendVerificationEmail();
+  /// §3.2 — Renvoie le lien d'activation du compte par e-mail.
+  Future<void> renvoyerEmailDeVerification({String? email}) {
+    final String? adresse = email ?? state.value?.email;
+    if (adresse == null || adresse.trim().isEmpty) {
+      throw const ApiException('Une adresse email est requise.');
+    }
+    return ref
+        .read(authApiProvider)
+        .resendVerificationEmail(email: adresse.trim());
+  }
+
+  /// Active le compte avec le code reçu par email (§3.4, option OTP factice).
+  Future<void> verifierAvecCode(String code, {String? email}) async {
+    state = AsyncData(
+      await ref.read(authApiProvider).verifierAvecCode(code, email: email),
+    );
+  }
+
+  /// §3.5 — l'email seul : le serveur envoie le lien de réinitialisation.
+  /// La suite se passe hors de l'app, la v1 n'exposant pas de route pour
+  /// consommer le jeton reçu.
+  Future<void> demanderReinitialisation({required String email}) =>
+      ref.read(authApiProvider).demanderReinitialisation(email: email);
 
   /// Recharge le profil, par exemple après validation de l'email.
   Future<void> rafraichir() async {
@@ -87,7 +120,11 @@ class AuthController extends AsyncNotifier<Utilisateur?> {
 }
 
 final authControllerProvider =
-    AsyncNotifierProvider<AuthController, Utilisateur?>(AuthController.new);
+    AsyncNotifierProvider<AuthController, Utilisateur?>(
+      AuthController.new,
+      // The splash screen exposes a manual retry for session restoration.
+      retry: (_, _) => null,
+    );
 
 /// Raccourcis de lecture pour le routeur, sans exposer `AsyncValue` partout.
 final utilisateurConnecteProvider = Provider<Utilisateur?>(

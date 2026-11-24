@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Audit SEC-002 (Android 12 et plus) — rien ne quitte l'appareil.
+     Le brouillon du dossier (dont le handicap, donnée de santé) et
+     l'historique du chatbot (CNI, matricule) sont dans les
+     SharedPreferences : ni la sauvegarde cloud ni le transfert vers un
+     nouveau téléphone ne doivent les emporter. Le candidat retrouve son
+     dossier sur le serveur en se reconnectant. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

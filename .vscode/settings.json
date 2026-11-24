@@ -1,0 +1,6 @@
+{
+  // L'extension Java de VS Code importe sinon le dossier `android/` comme un
+  // projet Gradle et lance son propre démon, qui dispute verrous et
+  // processeur au build de `flutter run`. Flutter pilote Gradle lui-même.
+  "java.import.gradle.enabled": false
+}

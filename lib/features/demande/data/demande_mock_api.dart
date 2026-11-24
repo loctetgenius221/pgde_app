@@ -1,17 +1,22 @@
+import 'dart:io';
+
+import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../domain/demande.dart';
 import 'demande_api.dart';
 import 'demande_mapper.dart';
 
-/// Faux backend du dossier, tant que `/api/v1` n'existe pas.
+/// Faux backend du dossier, tant que `/api/v1` n'est pas déployé.
 ///
-/// Il **fait transiter les données par la correspondance réelle** — `versCorps`
-/// puis `depuisApi` — au lieu de renvoyer l'objet reçu. Un mock complaisant
-/// masquerait les pertes de conversion ; celui-ci les révèle dès maintenant.
+/// Il ne stocke **pas** un `Demande` tel quel : il le fait passer par les
+/// quatre corps d'écriture du contrat, réassemble la réponse de
+/// `GET /candidat/profile`, puis la relit avec le vrai mappeur. Ce qui ne
+/// survit pas à l'aller-retour ne survivra pas non plus en production — et
+/// se voit tout de suite à l'écran, plutôt qu'au premier appel réel.
 class MockDemandeApi implements DemandeApi {
   static const Duration _latence = Duration(milliseconds: 500);
 
-  static Demande? _dossier;
+  Demande? _dossier;
 
   @override
   Future<Demande?> mien() async {
@@ -20,69 +25,211 @@ class MockDemandeApi implements DemandeApi {
   }
 
   @override
-  Future<Demande> creer(Demande demande) async {
+  Future<void> enregistrerIdentite(Demande demande) =>
+      _enregistrer(demande, EtapeEcriture.identite);
+
+  @override
+  Future<void> enregistrerFormations(Demande demande) =>
+      _enregistrer(demande, EtapeEcriture.formations);
+
+  @override
+  Future<void> enregistrerExperiences(Demande demande) =>
+      _enregistrer(demande, EtapeEcriture.experiences);
+
+  @override
+  Future<void> enregistrerVoeux(Demande demande) =>
+      _enregistrer(demande, EtapeEcriture.voeux);
+
+  /// Applique **la seule tranche** que porte l'endpoint appelé.
+  ///
+  /// C'est tout l'intérêt du découpage du contrat : enregistrer les vœux ne
+  /// doit rien changer aux formations. Le mock le vérifie en ne recopiant
+  /// que les champs de l'étape.
+  Future<void> _enregistrer(Demande envoye, EtapeEcriture etape) async {
     await Future<void>.delayed(_latence);
-    if (_dossier != null) {
-      // §2.1 : `utilisateur_id` est UNIQUE. Un second POST déclenche une
-      // erreur SQL 1062 côté serveur, que l'API doit traduire en 409.
-      throw const ApiException(
-        'Vous avez déjà une demande enregistrée.',
-        statusCode: 409,
-      );
-    }
-    return _dossier = _allerRetour(demande, id: 1369020);
+    final Demande actuel = _dossier ?? const Demande();
+
+    _dossier = switch (etape) {
+      EtapeEcriture.identite => actuel.copyWith(
+        deposee: true,
+        dateNaissance: envoye.dateNaissance,
+        lieuNaissance: envoye.lieuNaissance,
+        lieuResidence: envoye.lieuResidence,
+        adresse: envoye.adresse,
+        genre: envoye.genre,
+        situationMatrimoniale: envoye.situationMatrimoniale,
+        telephone1: envoye.telephone1,
+        telephone2: envoye.telephone2,
+        nombreEnfants: envoye.nombreEnfants,
+        regionNaissanceId: envoye.regionNaissanceId,
+        departementNaissanceId: envoye.departementNaissanceId,
+        regionResidenceId: envoye.regionResidenceId,
+        departementResidenceId: envoye.departementResidenceId,
+        aUnHandicap: envoye.aUnHandicap,
+        handicapId: envoye.handicapId,
+      ),
+      EtapeEcriture.formations => actuel.copyWith(
+        deposee: true,
+        formations: envoye.formations,
+      ),
+      EtapeEcriture.experiences => actuel.copyWith(
+        deposee: true,
+        aDeLExperience: envoye.aDeLExperience,
+        experiences: envoye.experiencesRetenues,
+      ),
+      EtapeEcriture.voeux => actuel.copyWith(
+        deposee: true,
+        emploi1Id: envoye.emploi1Id,
+        emploi2Id: envoye.emploi2Id,
+        anneesExperience1: envoye.anneesExperience1,
+        anneesExperience2: envoye.anneesExperience2,
+        resumeCv: envoye.resumeCv,
+      ),
+    };
+
+    // Aller-retour complet : ce que le serveur ne sait pas rendre est perdu
+    // ici aussi, immédiatement et visiblement.
+    _dossier = DemandeMapper.depuisApi(_profil(_dossier!));
   }
 
   @override
-  Future<Demande> mettreAJour(Demande demande) async {
+  Future<FichierJoint> deposerPhoto(File fichier) async {
     await Future<void>.delayed(_latence);
-    if (_dossier == null) {
-      throw const ApiException('Dossier introuvable.', statusCode: 404);
-    }
-    return _dossier = _allerRetour(demande, id: _dossier!.id);
+    final FichierJoint piece = _enregistrerFichier(fichier, 'uploads/photos');
+    _dossier = (_dossier ?? const Demande()).copyWith(photo: piece);
+    return piece;
   }
 
-  /// Simule le trajet complet : sérialisation vers le serveur, puis lecture de
-  /// la réponse. Ce qui ne survit pas au trajet ne survivra pas en production.
-  Demande _allerRetour(Demande demande, {int? id}) {
-    final corps = DemandeMapper.versCorps(demande);
-    return DemandeMapper.depuisApi(<String, dynamic>{
-      'id': id,
-      'identite': <String, dynamic>{
-        'datenaiss': corps['datenaiss'],
-        'lieunaiss': corps['lieunaiss'],
-        'lieuresidence': corps['lieuresidence'],
-        'addresse': corps['addresse'],
-        'genre': corps['genre'],
-        'situationmatrimoniale': corps['situationmatrimoniale'],
-        'telephone1': corps['telephone1'],
-        'telephone2': corps['telephone2'],
-        'nombreenfant': corps['nombreenfant'],
-        'pays': corps['country_id'],
-        'naissance': <String, dynamic>{
-          'region': corps['regionnaiss_id'],
-          'departement': corps['departementnaiss_id'],
-        },
-        'residence': <String, dynamic>{
-          'region': corps['regionresidence_id'],
-          'departement': corps['departementresidence_id'],
-        },
-        'handicap': corps['handicap_id'],
-      },
-      'formations': corps['formations'],
-      'has_experience': corps['hasExperience'] == 'oui',
-      'experiences': corps['experiences'],
-      'voeux': <String, dynamic>{
-        'emploi1': <String, dynamic>{
-          'id': corps['emploi1_id'],
-          'annees': corps['anneeexperience1'],
-        },
-        'emploi2': <String, dynamic>{
-          'id': corps['emploi2_id'],
-          'annees': corps['anneeexperience2'],
-        },
-      },
-      'cv_summary': corps['cv_summary'],
-    });
+  @override
+  Future<FichierJoint> deposerDiplome(File fichier) async {
+    await Future<void>.delayed(_latence);
+    return _enregistrerFichier(fichier, 'diplomes/15');
   }
+
+  /// Sans serveur, le « téléchargement » rend le fichier d'origine, tant que
+  /// l'appareil l'a encore.
+  @override
+  Future<File> telecharger(FichierJoint piece) async {
+    await Future<void>.delayed(_latence);
+    final File? local = _originaux[piece.chemin];
+    if (local != null && local.existsSync()) return local;
+    throw const ApiException('Fichier introuvable.', statusCode: 404);
+  }
+
+  final Map<String, File> _originaux = <String, File>{};
+
+  @override
+  Future<void> supprimerCv(String filePath) async {
+    await Future<void>.delayed(_latence);
+    final Demande actuel = _exigeUnDossier();
+    _dossier = actuel.copyWith(
+      cv: actuel.cv.where((p) => p.chemin != filePath).toList(),
+    );
+  }
+
+  Demande _exigeUnDossier() {
+    final Demande? actuel = _dossier;
+    if (actuel == null) {
+      throw const ApiException(
+        'Enregistrez d’abord votre demande avant d’y joindre des pièces.',
+        statusCode: 404,
+      );
+    }
+    return actuel;
+  }
+
+  /// Reproduit le nommage serveur du contrat v2 §6 : un nom aléatoire, qui
+  /// ne garde du fichier d'origine que son extension.
+  FichierJoint _enregistrerFichier(File fichier, String dossier) {
+    final String nom = fichier.path.split(RegExp(r'[\\/]')).last;
+    final int point = nom.lastIndexOf('.');
+    final String extension = point == -1 ? '' : nom.substring(point);
+    final String chemin =
+        '$dossier/${DateTime.now().microsecondsSinceEpoch}$extension';
+    _originaux[chemin] = fichier;
+    return FichierJoint(
+      chemin: chemin,
+      url: 'http://mock.local/$chemin',
+      nom: nom,
+      taille: fichier.existsSync() ? fichier.lengthSync() : null,
+    );
+  }
+
+  /// Réassemble la réponse de `GET /candidat/profile` (§5.1) à partir des
+  /// quatre corps d'écriture, comme le ferait le serveur.
+  Json _profil(Demande d) {
+    final Json identite = DemandeMapper.identite(d);
+    final Json voeux = DemandeMapper.voeux(d);
+
+    return <String, dynamic>{
+      'identity': <String, dynamic>{
+        'telephone1': identite['telephone1'],
+        'telephone2': identite['telephone2'],
+        'datenaiss': identite['datenaiss'],
+        'lieunaiss': identite['lieunaiss'],
+        'genre': identite['genre'],
+        'situationmatrimoniale': identite['situationmatrimoniale'],
+        'nombreenfant': identite['nombreenfant'],
+        'lieuresidence': identite['lieuresidence'],
+        'region_naissance': _entite(identite['regionnaiss_id']),
+        'departement_naissance': _entite(identite['departementnaiss_id']),
+        'region_residence': _entite(identite['regionresidence_id']),
+        'departement_residence': _entite(identite['departementresidence_id']),
+        'handicap': _entite(identite['handicap_id']),
+        'has_handicap': identite['has_handicap'] == true,
+        'photo_profil_url': d.photo?.url,
+      },
+      'formations': <Json>[
+        for (final Formation f in d.formations)
+          <String, dynamic>{
+            'academic_id': f.academicId,
+            'is_sans_diplome': f.sansDiplome,
+            'diplome': f.sansDiplome ? null : f.diplome,
+            'anneediplome': f.sansDiplome ? null : f.anneeDiplome,
+            'specialite': f.sansDiplome ? null : f.specialite,
+            'etablissementdiplome': f.sansDiplome ? null : f.etablissement,
+            'diplome_file': f.justificatif?.chemin,
+            'diplome_file_url': f.justificatif?.url,
+            'diplome_file_name': f.justificatif?.nom,
+          },
+      ],
+      'has_experience': d.aDeLExperience == true,
+      'experiences': <Json>[
+        for (final Experience e in d.experiencesRetenues)
+          <String, dynamic>{
+            'poste': e.poste,
+            'employeur': e.employeur,
+            'years': e.annees,
+            'description': e.description,
+          },
+      ],
+      'target_jobs': <String, dynamic>{
+        'emploi1': _entite(voeux['emploi1_id']),
+        'emploi2': _entite(voeux['emploi2_id']),
+        'anneeexperience1': voeux['anneeexperience1'],
+        'anneeexperience2': voeux['anneeexperience2'],
+        'cv_summary': voeux['cv_summary'],
+        'cv_files': <Json>[
+          for (final FichierJoint piece in d.cv)
+            <String, dynamic>{
+              'file_url': piece.url,
+              'file_path': piece.chemin,
+              'file_name': piece.nom,
+              'taille': piece.taille,
+            },
+        ],
+      },
+      'progression': <String, dynamic>{
+        'is_completed': d.etapeCourante == null,
+        'percentage': (d.progression * 100).round(),
+      },
+    };
+  }
+
+  /// Entité résolue `{id, libelle}` telle que la rend le serveur, ou `null`.
+  static Json? _entite(Object? id) =>
+      id == null ? null : <String, dynamic>{'id': id, 'libelle': ''};
 }
+
+/// Les quatre tranches d'écriture du contrat (§5.2 à §5.5).
+enum EtapeEcriture { identite, formations, experiences, voeux }

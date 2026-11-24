@@ -6,12 +6,31 @@ part of 'demande.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
+_FichierJoint _$FichierJointFromJson(Map<String, dynamic> json) =>
+    _FichierJoint(
+      chemin: json['chemin'] as String,
+      url: json['url'] as String,
+      nom: json['nom'] as String? ?? '',
+      taille: (json['taille'] as num?)?.toInt(),
+    );
+
+Map<String, dynamic> _$FichierJointToJson(_FichierJoint instance) =>
+    <String, dynamic>{
+      'chemin': instance.chemin,
+      'url': instance.url,
+      'nom': instance.nom,
+      'taille': instance.taille,
+    };
+
 _Formation _$FormationFromJson(Map<String, dynamic> json) => _Formation(
   academicId: (json['academicId'] as num).toInt(),
   diplome: json['diplome'] as String? ?? '',
   anneeDiplome: (json['anneeDiplome'] as num?)?.toInt(),
   specialite: json['specialite'] as String? ?? '',
   etablissement: json['etablissement'] as String? ?? '',
+  justificatif: json['justificatif'] == null
+      ? null
+      : FichierJoint.fromJson(json['justificatif'] as Map<String, dynamic>),
 );
 
 Map<String, dynamic> _$FormationToJson(_Formation instance) =>
@@ -21,6 +40,7 @@ Map<String, dynamic> _$FormationToJson(_Formation instance) =>
       'anneeDiplome': instance.anneeDiplome,
       'specialite': instance.specialite,
       'etablissement': instance.etablissement,
+      'justificatif': instance.justificatif?.toJson(),
     };
 
 _Experience _$ExperienceFromJson(Map<String, dynamic> json) => _Experience(
@@ -39,7 +59,8 @@ Map<String, dynamic> _$ExperienceToJson(_Experience instance) =>
     };
 
 _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
-  id: (json['id'] as num?)?.toInt(),
+  deposee: json['deposee'] as bool? ?? false,
+  numeroDossier: (json['numeroDossier'] as num?)?.toInt(),
   dateNaissance: const DateOnlyConverter().fromJson(
     json['dateNaissance'] as String?,
   ),
@@ -59,13 +80,22 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
   departementNaissanceId: (json['departementNaissanceId'] as num?)?.toInt(),
   regionResidenceId: (json['regionResidenceId'] as num?)?.toInt(),
   departementResidenceId: (json['departementResidenceId'] as num?)?.toInt(),
+  aUnHandicap: json['aUnHandicap'] as bool? ?? false,
   handicapId: (json['handicapId'] as num?)?.toInt(),
   formations:
       (json['formations'] as List<dynamic>?)
           ?.map((e) => Formation.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const <Formation>[],
-  aDeLExperience: json['aDeLExperience'] as bool? ?? false,
+  cv:
+      (json['cv'] as List<dynamic>?)
+          ?.map((e) => FichierJoint.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const <FichierJoint>[],
+  photo: json['photo'] == null
+      ? null
+      : FichierJoint.fromJson(json['photo'] as Map<String, dynamic>),
+  aDeLExperience: json['aDeLExperience'] as bool?,
   experiences:
       (json['experiences'] as List<dynamic>?)
           ?.map((e) => Experience.fromJson(e as Map<String, dynamic>))
@@ -79,7 +109,8 @@ _Demande _$DemandeFromJson(Map<String, dynamic> json) => _Demande(
 );
 
 Map<String, dynamic> _$DemandeToJson(_Demande instance) => <String, dynamic>{
-  'id': instance.id,
+  'deposee': instance.deposee,
+  'numeroDossier': instance.numeroDossier,
   'dateNaissance': const DateOnlyConverter().toJson(instance.dateNaissance),
   'lieuNaissance': instance.lieuNaissance,
   'lieuResidence': instance.lieuResidence,
@@ -95,8 +126,11 @@ Map<String, dynamic> _$DemandeToJson(_Demande instance) => <String, dynamic>{
   'departementNaissanceId': instance.departementNaissanceId,
   'regionResidenceId': instance.regionResidenceId,
   'departementResidenceId': instance.departementResidenceId,
+  'aUnHandicap': instance.aUnHandicap,
   'handicapId': instance.handicapId,
   'formations': instance.formations.map((e) => e.toJson()).toList(),
+  'cv': instance.cv.map((e) => e.toJson()).toList(),
+  'photo': instance.photo?.toJson(),
   'aDeLExperience': instance.aDeLExperience,
   'experiences': instance.experiences.map((e) => e.toJson()).toList(),
   'emploi1Id': instance.emploi1Id,

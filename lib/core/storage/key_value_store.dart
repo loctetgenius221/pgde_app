@@ -38,7 +38,9 @@ class KeyValueStore {
 
 /// Surchargé dans `main()`, une fois `SharedPreferences` initialisé.
 final sharedPreferencesProvider = Provider<SharedPreferences>(
-  (ref) => throw UnimplementedError('sharedPreferencesProvider doit être surchargé dans main()'),
+  (ref) => throw UnimplementedError(
+    'sharedPreferencesProvider doit être surchargé dans main()',
+  ),
 );
 
 final keyValueStoreProvider = Provider<KeyValueStore>(

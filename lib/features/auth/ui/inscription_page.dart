@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_dimens.dart';
 import '../../../core/ui/form_submission.dart';
 import '../../../core/ui/icone.dart';
 import '../../../core/ui/responsive.dart';
 import '../application/auth_controller.dart';
 
-/// Création de compte — règles exactes de `AuthController::register` (§3.2).
+/// Création de compte — règles de `POST /auth/register` (§3.1).
 ///
 /// Le compte naît désactivé : aucun jeton n'est émis, l'utilisateur est
 /// renvoyé vers la connexion, puis vers l'écran de vérification.
@@ -55,6 +57,7 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
   Future<void> _inscrire() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final String emailSaisi = _email.text.trim();
     final succes = await soumettre(
       () => ref
           .read(authControllerProvider.notifier)
@@ -63,26 +66,48 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
             lastname: _nom.text.trim(),
             username: _username.text.trim(),
             numberid: _numberid.text.trim(),
-            email: _email.text.trim(),
+            email: emailSaisi,
             password: _password.text,
           ),
     );
     if (!succes || !mounted) return;
 
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        duration: Duration(seconds: 6),
-        content: Text(
-          'Compte créé. Un email de vérification vous a été envoyé : '
-          'activez-le avant de déposer votre demande.',
-        ),
-      ),
+    context.go(
+      '${Routes.verificationEmail}?email=${Uri.encodeComponent(emailSaisi)}',
     );
   }
 
   String? _obligatoire(String? v, String libelle) =>
       (v == null || v.trim().isEmpty) ? 'Saisissez votre $libelle' : null;
+
+  String? _validerNom(String? valeur, String libelle) {
+    final String? erreur = _obligatoire(valeur, libelle);
+    if (erreur != null) return erreur;
+    if (valeur!.trim().length > 255) return '255 caractères maximum';
+    return null;
+  }
+
+  String? _validerIdentifiant(String? valeur) {
+    final String? erreur = _obligatoire(valeur, "nom d'utilisateur");
+    if (erreur != null) return erreur;
+    final String identifiant = valeur!.trim();
+    if (identifiant.length < 3 || identifiant.length > 50) {
+      return 'De 3 à 50 caractères';
+    }
+    if (!RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(identifiant)) {
+      return 'Utilisez uniquement des lettres, chiffres, points, tirets ou tirets bas';
+    }
+    return null;
+  }
+
+  String? _validerNumeroPiece(String? valeur) {
+    final String? erreur = _obligatoire(valeur, 'numéro de CNI ou passeport');
+    if (erreur != null) return erreur;
+    if (!RegExp(r'^[A-Za-z0-9]+$').hasMatch(valeur!.trim())) {
+      return 'Utilisez uniquement des lettres et des chiffres';
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,14 +125,6 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Text('Créer un compte', style: theme.textTheme.displaySmall),
-                  const SizedBox(height: Espace.xs),
-                  Text(
-                    'Quelques informations suffisent. Votre dossier se '
-                    'remplira ensuite, étape par étape.',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                   const SizedBox(height: Espace.xl),
 
                   BandeauErreur(erreurGlobale),
@@ -117,39 +134,40 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     controller: _prenom,
                     textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.next,
+                    maxLength: 255,
                     decoration: InputDecoration(
                       labelText: 'Prénom',
                       prefixIcon: const PrefixeChamp(Icones.prenom),
                       errorText: erreurDuChamp('firstname'),
                     ),
-                    validator: (v) => _obligatoire(v, 'prénom'),
+                    validator: (v) => _validerNom(v, 'prénom'),
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(
                     controller: _nom,
                     textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.next,
+                    maxLength: 255,
                     decoration: InputDecoration(
                       labelText: 'Nom',
                       prefixIcon: const PrefixeChamp(Icones.nom),
                       errorText: erreurDuChamp('lastname'),
                     ),
-                    validator: (v) => _obligatoire(v, 'nom'),
+                    validator: (v) => _validerNom(v, 'nom'),
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(
                     controller: _numberid,
-                    keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.next,
                     inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
+                      FilteringTextInputFormatter.allow(RegExp('[a-zA-Z0-9]')),
                     ],
                     decoration: InputDecoration(
                       labelText: 'Numéro de CNI ou de passeport',
                       prefixIcon: const PrefixeChamp(Icones.piece),
                       errorText: erreurDuChamp('numberid'),
                     ),
-                    validator: (v) => _obligatoire(v, 'numéro de CNI'),
+                    validator: _validerNumeroPiece,
                   ),
 
                   const _Section('Vos identifiants'),
@@ -159,11 +177,11 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: "Nom d'utilisateur",
-                      helperText: 'C’est avec lui que vous vous connecterez',
+                      helperText: 'Sert à vous connecter',
                       prefixIcon: const PrefixeChamp(Icones.identifiant),
                       errorText: erreurDuChamp('username'),
                     ),
-                    validator: (v) => _obligatoire(v, "nom d'utilisateur"),
+                    validator: _validerIdentifiant,
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(
@@ -179,8 +197,13 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     validator: (v) {
                       final valeur = v?.trim() ?? '';
                       if (valeur.isEmpty) return 'Saisissez votre email';
-                      if (!valeur.contains('@') || !valeur.contains('.')) {
+                      if (!RegExp(
+                        r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                      ).hasMatch(valeur)) {
                         return 'Adresse email invalide';
+                      }
+                      if (valeur.length > 255) {
+                        return '255 caractères maximum';
                       }
                       return null;
                     },
@@ -210,13 +233,23 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'Mot de passe',
-                      helperText: '8 caractères minimum',
+                      helperText: '8 caractères, une majuscule et un chiffre',
                       prefixIcon: const PrefixeChamp(Icones.motDePasse),
                       errorText: erreurDuChamp('password'),
                     ),
-                    validator: (v) => (v == null || v.length < 8)
-                        ? 'Au moins 8 caractères'
-                        : null,
+                    // Contrat v2 §3.1 : mêmes exigences que le site web, pour
+                    // qu'un candidat ait une seule règle à retenir.
+                    validator: (v) {
+                      final String valeur = v ?? '';
+                      if (valeur.length < 8) return 'Au moins 8 caractères';
+                      if (!RegExp('[A-Z]').hasMatch(valeur)) {
+                        return 'Au moins une lettre majuscule';
+                      }
+                      if (!RegExp('[0-9]').hasMatch(valeur)) {
+                        return 'Au moins un chiffre';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(

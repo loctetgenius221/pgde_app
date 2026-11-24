@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fond de l'icône adaptative Android. Généré par `flutter_launcher_icons`
+  depuis `adaptive_icon_background` dans pubspec.yaml : modifier la valeur
+  ici serait écrasé à la prochaine génération.
+-->
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
