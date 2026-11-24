@@ -77,13 +77,20 @@ abstract class FichierJoint with _$FichierJoint {
   /// non assainis : une URL brute casse le téléchargement et l'affichage.
   String get urlSure => Uri.encodeFull(url);
 
-  /// Nom lisible, déduit du chemin quand le serveur n'en fournit pas.
+  /// Nom lisible.
+  ///
+  /// [nom] n'est renseigné que lorsque le candidat vient de choisir le
+  /// fichier sur cet appareil. Le serveur, lui, attribue un nom aléatoire
+  /// (contrat v2 §6) qu'il ne faut pas présenter comme celui du candidat :
+  /// à défaut, on nomme la pièce par son format.
   String get nomAffiche {
     if (nom.isNotEmpty) return nom;
     final String dernier = chemin.split('/').last;
-    // Le serveur préfixe par `time() . '_'` (§4) : on retire cet horodatage.
-    final int separateur = dernier.indexOf('_');
-    return separateur == -1 ? dernier : dernier.substring(separateur + 1);
+    final int point = dernier.lastIndexOf('.');
+    final String format = point == -1
+        ? ''
+        : dernier.substring(point + 1).toUpperCase();
+    return format.isEmpty ? 'Document' : 'Document $format';
   }
 
   String get tailleLisible {

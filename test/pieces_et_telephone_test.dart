@@ -98,12 +98,14 @@ void main() {
   });
 
   group('Pièce jointe — lecture (§5.1)', () {
-    test('le nom perd l’horodatage ajouté par le serveur', () {
+    test('le nom aléatoire du serveur n’est pas présenté (contrat v2 §6)', () {
       const piece = FichierJoint(
-        chemin: 'uploads/cv/1775151073_Acte de reclassement.pdf',
+        chemin: 'cv/15/7d2a9c1e-4b6f.pdf',
         url: 'http://x/y',
       );
-      expect(piece.nomAffiche, 'Acte de reclassement.pdf');
+      expect(piece.nomAffiche, 'Document PDF');
+      // Le nom choisi sur l'appareil, lui, reste affiché.
+      expect(piece.copyWith(nom: 'mon_cv.pdf').nomAffiche, 'mon_cv.pdf');
     });
 
     test('l’URL est encodée : les noms portent espaces et accents', () {

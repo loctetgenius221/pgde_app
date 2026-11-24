@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show Display, FlutterView;
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/storage/key_value_store.dart';
+import 'features/demande/data/demande_api.dart';
 
 Future<void> main() async {
   final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +31,11 @@ Future<void> main() async {
   await initializeDateFormatting('fr_FR');
 
   final prefs = await SharedPreferences.getInstance();
+
+  // Audit SEC-005 — des copies de CV ou de diplômes ouvertes lors d'une
+  // session terminée sans déconnexion (jeton expiré, app tuée) ne
+  // survivent pas au lancement suivant.
+  unawaited(CopiesLocales.purger());
 
   runApp(
     ProviderScope(

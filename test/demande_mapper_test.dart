@@ -286,7 +286,9 @@ void main() {
       // L'année est castée : le serveur l'envoie en chaîne.
       expect(f.anneeDiplome, 2022);
       expect(f.justificatif, isNotNull);
-      expect(f.justificatif!.nom, '1727175260_diplome.pdf');
+      // Contrat v2 §6 : le nom serveur est aléatoire, il n'est pas repris.
+      expect(f.justificatif!.nom, isEmpty);
+      expect(f.justificatif!.nomAffiche, 'Document PDF');
       expect(f.justificatif!.url, contains('uploads/diplomes'));
     });
 
@@ -311,7 +313,8 @@ void main() {
     test('le CV déposé reste lisible', () {
       final Demande d = DemandeMapper.depuisApi(reponse);
       expect(d.cv, hasLength(1));
-      expect(d.cv.single.nom, '1727175260_cv.pdf');
+      expect(d.cv.single.url, contains('cv'));
+      expect(d.cv.single.nomAffiche, 'Document PDF');
     });
 
     test('une liste d’expériences pleine vaut « oui »', () {

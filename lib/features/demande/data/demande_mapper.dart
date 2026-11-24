@@ -97,7 +97,8 @@ abstract final class DemandeMapper {
     return FichierJoint(
       chemin: chemin.isEmpty ? url : chemin,
       url: url.isEmpty ? _adresse(chemin) : url,
-      nom: _texte(j['file_name'] ?? j['nom']),
+      // `file_name` est le nom aléatoire attribué par le serveur (contrat
+      // v2 §6) : il n'est pas repris comme nom choisi par le candidat.
       taille: _entier(j['taille']),
     );
   }

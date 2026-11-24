@@ -233,13 +233,23 @@ class _InscriptionPageState extends ConsumerState<InscriptionPage>
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'Mot de passe',
-                      helperText: '8 caractères minimum',
+                      helperText: '8 caractères, une majuscule et un chiffre',
                       prefixIcon: const PrefixeChamp(Icones.motDePasse),
                       errorText: erreurDuChamp('password'),
                     ),
-                    validator: (v) => (v == null || v.length < 8)
-                        ? 'Au moins 8 caractères'
-                        : null,
+                    // Contrat v2 §3.1 : mêmes exigences que le site web, pour
+                    // qu'un candidat ait une seule règle à retenir.
+                    validator: (v) {
+                      final String valeur = v ?? '';
+                      if (valeur.length < 8) return 'Au moins 8 caractères';
+                      if (!RegExp('[A-Z]').hasMatch(valeur)) {
+                        return 'Au moins une lettre majuscule';
+                      }
+                      if (!RegExp('[0-9]').hasMatch(valeur)) {
+                        return 'Au moins un chiffre';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: Espace.sm),
                   TextFormField(

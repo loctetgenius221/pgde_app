@@ -28,15 +28,39 @@ abstract interface class DemandeApi {
   /// §6.1 — champ multipart `photo`.
   Future<FichierJoint> deposerPhoto(File fichier);
 
-  /// §6.4 — champ multipart `diplome_file`. Le `file_path` retourné doit
+  /// §6.5 — champ multipart `diplome_file`. Le `file_path` retourné doit
   /// ensuite partir dans `PUT /candidat/formations`.
+  ///
+  /// L'envoi de CV (`POST /candidat/files/cv`) est **fermé** depuis le
+  /// contrat v2 (§6.2, réponse `410`) : il n'a plus d'équivalent ici. Les CV
+  /// déjà enregistrés restent consultables et supprimables.
   Future<FichierJoint> deposerDiplome(File fichier);
 
-  /// §6.2 — champ multipart `cv_file`.
-  Future<FichierJoint> deposerCv(File fichier);
-
-  /// §6.3 — le chemin doit appartenir à `cv_files` du compte.
+  /// §6.4 — le chemin doit appartenir à `cv_files` du compte.
   Future<void> supprimerCv(String filePath);
+
+  /// §6.3, §6.6 — télécharge un CV ou un justificatif **avec** le jeton, et
+  /// rend la copie locale à confier au visualiseur du téléphone.
+  Future<File> telecharger(FichierJoint piece);
+}
+
+/// Dossier des copies locales de pièces téléchargées.
+///
+/// Audit SEC-005 — ces copies contiennent CV et diplômes : elles sont
+/// effacées à la déconnexion, comme le brouillon, pour qu'un téléphone
+/// partagé ne les garde pas.
+abstract final class CopiesLocales {
+  static Directory get dossier =>
+      Directory('${Directory.systemTemp.path}${Platform.pathSeparator}pieces');
+
+  static Future<void> purger() async {
+    try {
+      final Directory d = dossier;
+      if (d.existsSync()) await d.delete(recursive: true);
+    } on FileSystemException {
+      // Fichier encore ouvert par un visualiseur : purgé au prochain essai.
+    }
+  }
 }
 
 class HttpDemandeApi implements DemandeApi {
@@ -100,24 +124,9 @@ class HttpDemandeApi implements DemandeApi {
     return FichierJoint(
       chemin: _texte(data['file_path']),
       url: _texte(data['file_url']),
-      nom: _texte(data['file_name']).isEmpty
-          ? _nomDe(fichier)
-          : _texte(data['file_name']),
-      taille: fichier.existsSync() ? fichier.lengthSync() : null,
-    );
-  }
-
-  @override
-  Future<FichierJoint> deposerCv(File fichier) async {
-    final Json data = await _envoyer(
-      '/candidat/files/cv',
-      champ: 'cv_file',
-      fichier: fichier,
-    );
-    return FichierJoint(
-      chemin: _texte(data['file_path']),
-      url: _texte(data['file_url']),
-      nom: _texte(data['file_name']),
+      // Le `file_name` du serveur est aléatoire (contrat v2 §6) : on garde
+      // le nom que le candidat a choisi, tant qu'on le connaît.
+      nom: _nomDe(fichier),
       taille: fichier.existsSync() ? fichier.lengthSync() : null,
     );
   }
@@ -127,6 +136,21 @@ class HttpDemandeApi implements DemandeApi {
     '/candidat/files/cv',
     body: <String, dynamic>{'file_path': filePath},
   );
+
+  @override
+  Future<File> telecharger(FichierJoint piece) async {
+    // Le nom aléatoire du serveur porte la bonne extension : c'est elle qui
+    // permet au téléphone de choisir le visualiseur.
+    final String nom = Uri.parse(piece.urlSure).pathSegments.lastOrNull ?? '';
+    final Directory dossier = await CopiesLocales.dossier.create(
+      recursive: true,
+    );
+    final String destination =
+        '${dossier.path}${Platform.pathSeparator}'
+        '${nom.isEmpty ? 'piece' : nom}';
+    await _client.telecharger(piece.urlSure, destination);
+    return File(destination);
+  }
 
   Future<Json> _envoyer(
     String chemin, {

@@ -92,21 +92,37 @@ class HttpAuthApi implements AuthApi {
     return Utilisateur.fromJson(data['user']! as Json);
   }
 
+  /// Message unique pour des identifiants refusés (contrat v2 §3.3) : dire
+  /// lequel des deux est faux aiderait à deviner les comptes existants.
+  static const String identifiantsIncorrects =
+      'Identifiant ou mot de passe incorrect.';
+
   @override
   Future<Session> login({
     required String identifiant,
     required String password,
-  }) async => _session(
-    await _client.post(
-          '/auth/login',
-          body: <String, dynamic>{
-            'login': identifiant,
-            'password': password,
-            'device_name': _deviceName,
-          },
-        )
-        as Json,
-  );
+  }) async {
+    try {
+      return _session(
+        await _client.post(
+              '/auth/login',
+              body: <String, dynamic>{
+                'login': identifiant,
+                'password': password,
+                'device_name': _deviceName,
+              },
+            )
+            as Json,
+      );
+    } on ApiException catch (e) {
+      // Le serveur place l'échec sous `errors.login` ou `errors.password` :
+      // on le remonte sans erreur de champ, pour un bandeau générique.
+      if (e.isUnauthorized) {
+        throw const ApiException(identifiantsIncorrects, statusCode: 401);
+      }
+      rethrow;
+    }
+  }
 
   static Session _session(Json data) => (
     token: data['token']! as String,

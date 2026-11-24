@@ -106,14 +106,17 @@ class MockDemandeApi implements DemandeApi {
     return _enregistrerFichier(fichier, 'diplomes/15');
   }
 
+  /// Sans serveur, le « téléchargement » rend le fichier d'origine, tant que
+  /// l'appareil l'a encore.
   @override
-  Future<FichierJoint> deposerCv(File fichier) async {
+  Future<File> telecharger(FichierJoint piece) async {
     await Future<void>.delayed(_latence);
-    final Demande actuel = _exigeUnDossier();
-    final FichierJoint piece = _enregistrerFichier(fichier, 'uploads/cv');
-    _dossier = actuel.copyWith(cv: <FichierJoint>[piece]);
-    return piece;
+    final File? local = _originaux[piece.chemin];
+    if (local != null && local.existsSync()) return local;
+    throw const ApiException('Fichier introuvable.', statusCode: 404);
   }
+
+  final Map<String, File> _originaux = <String, File>{};
 
   @override
   Future<void> supprimerCv(String filePath) async {
@@ -135,13 +138,15 @@ class MockDemandeApi implements DemandeApi {
     return actuel;
   }
 
-  /// Reproduit le nommage serveur : `time() . '_' . nom_original`, non
-  /// assaini — espaces et accents compris. C'est précisément ce qui oblige
-  /// l'app à encoder les URLs avant de les ouvrir.
+  /// Reproduit le nommage serveur du contrat v2 §6 : un nom aléatoire, qui
+  /// ne garde du fichier d'origine que son extension.
   FichierJoint _enregistrerFichier(File fichier, String dossier) {
     final String nom = fichier.path.split(RegExp(r'[\\/]')).last;
+    final int point = nom.lastIndexOf('.');
+    final String extension = point == -1 ? '' : nom.substring(point);
     final String chemin =
-        '$dossier/${DateTime.now().millisecondsSinceEpoch ~/ 1000}_$nom';
+        '$dossier/${DateTime.now().microsecondsSinceEpoch}$extension';
+    _originaux[chemin] = fichier;
     return FichierJoint(
       chemin: chemin,
       url: 'http://mock.local/$chemin',

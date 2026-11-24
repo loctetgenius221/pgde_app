@@ -21,17 +21,50 @@ class ApiClient {
 
   final Dio _dio;
 
+  /// Clé de `RequestOptions.extra` : le corps de la requête et de sa réponse
+  /// ne doit jamais apparaître dans les journaux.
+  static const String confidentiel = 'confidentiel';
+
   Future<Object?> get(String path, {Json? query}) =>
       _send(() => _dio.get<dynamic>(path, queryParameters: query));
 
-  Future<Object?> post(String path, {Object? body}) =>
-      _send(() => _dio.post<dynamic>(path, data: body));
+  /// [delai] remplace le délai de réception par défaut, pour une route plus
+  /// lente que les autres. [contenuConfidentiel] tient le contenu à l'écart
+  /// des journaux (données personnelles).
+  Future<Object?> post(
+    String path, {
+    Object? body,
+    Duration? delai,
+    bool contenuConfidentiel = false,
+  }) => _send(
+    () => _dio.post<dynamic>(
+      path,
+      data: body,
+      options: Options(
+        receiveTimeout: delai,
+        extra: <String, dynamic>{confidentiel: contenuConfidentiel},
+      ),
+    ),
+  );
 
   Future<Object?> put(String path, {Object? body}) =>
       _send(() => _dio.put<dynamic>(path, data: body));
 
   Future<Object?> delete(String path, {Object? body}) =>
       _send(() => _dio.delete<dynamic>(path, data: body));
+
+  /// Télécharge [url] dans [destination], **avec** le jeton Bearer.
+  ///
+  /// Les CV et justificatifs sont servis par des routes protégées (contrat
+  /// v2 §6.3, §6.6) : un navigateur ouvert sur l'URL nue reçoit un 401.
+  /// [url] peut être absolue — Dio ignore alors `baseUrl`.
+  Future<void> telecharger(String url, String destination) => _send(
+    () => _dio.download(
+      url,
+      destination,
+      options: Options(receiveTimeout: const Duration(minutes: 2)),
+    ),
+  ).then((_) {});
 
   Future<Object?> _send(Future<Response<dynamic>> Function() request) async {
     try {
@@ -78,18 +111,59 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
-  if (kDebugMode) {
-    dio.interceptors.add(
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        logPrint: (Object? o) => debugPrint(o.toString()),
-      ),
-    );
-  }
+  if (kDebugMode) dio.interceptors.add(JournalReseau());
 
   return dio;
 });
+
+/// Journal HTTP de débogage, qui tait le contenu des requêtes confidentielles.
+///
+/// Les échanges avec le chatbot portent une CNI, un matricule, un nom : le
+/// contrat interdit de les journaliser. Pour ces requêtes, seuls la méthode,
+/// le chemin et le statut sont écrits.
+class JournalReseau extends LogInterceptor {
+  JournalReseau({void Function(Object?)? ecrire})
+    : super(
+        // Audit SEC-008 — les en-têtes portent le jeton Bearer : ils ne
+        // doivent pas finir dans logcat, même en debug.
+        requestHeader: false,
+        requestBody: true,
+        responseBody: true,
+        logPrint: ecrire ?? (Object? o) => debugPrint(o.toString()),
+      );
+
+  static bool _masque(RequestOptions o) =>
+      o.extra[ApiClient.confidentiel] == true;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (!_masque(options)) return super.onRequest(options, handler);
+    logPrint('→ ${options.method} ${options.path} (contenu masqué)');
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    if (!_masque(response.requestOptions)) {
+      return super.onResponse(response, handler);
+    }
+    logPrint('← ${response.statusCode} ${response.requestOptions.path}');
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (!_masque(err.requestOptions)) return super.onError(err, handler);
+    logPrint(
+      '✕ ${err.response?.statusCode ?? err.type.name} '
+      '${err.requestOptions.path}',
+    );
+    handler.next(err);
+  }
+}
 
 final apiClientProvider = Provider<ApiClient>(
   (ref) => ApiClient(ref.watch(dioProvider)),

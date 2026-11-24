@@ -153,6 +153,7 @@ class DemandeController extends AsyncNotifier<Demande> {
     _sauvegarde?.cancel();
     await ref.read(brouillonStoreProvider).purger();
     await ref.read(piecesEnAttenteProvider.notifier).effacer();
+    await CopiesLocales.purger();
   }
 
   /// Abandonne les modifications locales et repart de l'état serveur.

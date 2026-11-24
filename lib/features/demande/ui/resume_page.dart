@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
@@ -18,6 +18,7 @@ import '../../auth/domain/utilisateur.dart';
 import '../../reference/data/reference_repository.dart';
 import '../../reference/domain/referentiel.dart';
 import '../application/demande_controller.dart';
+import '../data/demande_api.dart';
 import '../domain/demande.dart';
 import '../domain/telephone.dart';
 import '../domain/wizard.dart';
@@ -1036,29 +1037,62 @@ class _Vide extends StatelessWidget {
 }
 
 /// Pièce déposée, ouvrable d'un appui.
-class _Piece extends StatelessWidget {
+///
+/// CV et justificatifs sont servis par des routes protégées (contrat v2
+/// §6.3, §6.6) : un navigateur ouvert sur l'URL n'aurait pas le jeton et
+/// recevrait un 401. La pièce est donc téléchargée avec le jeton, puis
+/// confiée au visualiseur du téléphone.
+class _Piece extends ConsumerStatefulWidget {
   const _Piece({required this.piece, required this.origine});
 
   final FichierJoint piece;
   final String origine;
 
+  @override
+  ConsumerState<_Piece> createState() => _PieceState();
+}
+
+class _PieceState extends ConsumerState<_Piece> {
+  bool _telechargement = false;
+
   Future<void> _ouvrir() async {
-    // `open_filex` ne sait ouvrir qu'un fichier local : une pièce distante
-    // passe par le navigateur, qui gère le téléchargement et le format.
-    final Uri? adresse = Uri.tryParse(piece.urlSure);
-    if (adresse == null) return;
-    if (!await launchUrl(adresse, mode: LaunchMode.externalApplication)) {
-      await OpenFilex.open(piece.chemin);
+    if (_telechargement) return;
+    setState(() => _telechargement = true);
+    String? echec;
+    try {
+      final file = await ref.read(demandeApiProvider).telecharger(widget.piece);
+      final OpenResult resultat = await OpenFilex.open(file.path);
+      if (resultat.type == ResultType.noAppToOpen) {
+        echec = 'Aucune application ne permet d’ouvrir ce fichier.';
+      } else if (resultat.type != ResultType.done) {
+        echec = 'Impossible d’ouvrir ce fichier.';
+      }
+    } on ApiException catch (e) {
+      // Un 401 a déjà renvoyé vers la connexion (AuthInterceptor).
+      if (!e.isUnauthorized) {
+        echec = e.isNotFound ? 'Ce fichier n’existe plus.' : e.message;
+      }
+    } on Object {
+      echec = 'Impossible d’ouvrir ce fichier.';
+    } finally {
+      if (mounted) setState(() => _telechargement = false);
+    }
+    if (echec != null && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(echec)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final FichierJoint piece = widget.piece;
+    final String origine = widget.origine;
     final ThemeData theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: _ouvrir,
+        onTap: _telechargement ? null : _ouvrir,
         borderRadius: BorderRadius.circular(Rayon.champ),
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -1100,11 +1134,17 @@ class _Piece extends StatelessWidget {
                   ],
                 ),
               ),
-              Icone(
-                Icones.suivant,
-                taille: 16,
-                couleur: theme.colorScheme.onSurfaceVariant,
-              ),
+              if (_telechargement)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icone(
+                  Icones.suivant,
+                  taille: 16,
+                  couleur: theme.colorScheme.onSurfaceVariant,
+                ),
             ],
           ),
         ),

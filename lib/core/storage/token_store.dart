@@ -6,8 +6,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Conservation du jeton Sanctum dans le Keystore/Keychain.
 ///
-/// Le jeton Sanctum est opaque et sans expiration : il n'y a pas de
-/// « refresh token » (§8.5). Sur 401, on purge et on renvoie à la connexion.
+/// Le jeton Sanctum est opaque, valable 30 jours et révoqué à chaque
+/// changement de mot de passe (contrat v2 §1). Il n'y a pas de « refresh
+/// token » : sur 401, on purge et on renvoie à la connexion.
 ///
 /// **Aucun accès au Keystore n'est attendu sans limite.** Sur une tablette
 /// Lenovo TB350XU (Android 14), le Keystore tente à chaque génération de clé

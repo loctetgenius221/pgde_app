@@ -18,17 +18,20 @@ abstract final class ReglesFichiers {
 
   static const Set<String> _photo = <String>{'jpg', 'jpeg', 'png', 'webp'};
 
-  /// §6.4 — le justificatif de diplôme **accepte les images** : le candidat
+  /// §6.5 — le justificatif de diplôme **accepte les images** : le candidat
   /// qui photographie son diplôme n'est plus bloqué.
   static const Set<String> _diplome = <String>{
     'pdf',
+    'doc',
+    'docx',
+    'rtf',
+    'txt',
     'jpg',
     'jpeg',
     'png',
-    'docx',
   };
 
-  /// §6.2 — le CV, lui, reste un document bureautique.
+  /// CV déjà enregistrés uniquement : l'envoi est fermé (contrat v2 §6.2).
   static const Set<String> _cv = <String>{'pdf', 'doc', 'docx'};
 
   static Set<String> extensionsAdmises(TypeFichier type) => switch (type) {
@@ -77,7 +80,7 @@ abstract final class ReglesFichiers {
   /// Libellé des formats admis, à afficher sous le sélecteur.
   static String formatsAdmis(TypeFichier type) => switch (type) {
     TypeFichier.photo => 'JPG, PNG ou WEBP · 4 Mo maximum',
-    TypeFichier.diplome => 'PDF, image ou DOCX · 8 Mo maximum',
+    TypeFichier.diplome => 'PDF, image, Word, RTF ou TXT · 8 Mo maximum',
     TypeFichier.cv => 'PDF, DOC ou DOCX · 8 Mo maximum',
   };
 }
